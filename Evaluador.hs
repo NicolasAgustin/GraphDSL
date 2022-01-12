@@ -47,14 +47,11 @@ class Monad m => MonadState m where
     lookfor :: String -> m Integer
     update :: String -> Integer -> m ()
 
-
-
 instance MonadState Set where
     lookfor var = Set (\s -> maybe Nothing (\v -> Just (v, s, 0)) (lookfor' var s))
                         where lookfor' var [] = Nothing
                               lookfor' var ((var', val):ss) | var == var' = Just val
                                                             | otherwise = lookfor' var ss
-
     update var val = Set (\s -> Just ((), update' var val s,0))
                     where update' var val [] = [(var, val)]
                           update' var val ((var', val'):ss) | var == var' = (var, val):ss
