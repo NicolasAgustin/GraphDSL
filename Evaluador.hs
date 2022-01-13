@@ -163,3 +163,6 @@ evalBoolExp (LessEq l r)    = do e1 <- evalIntExp l
 evalBoolExp (Eq l r)        = do e1 <- evalIntExp l
                                  e2 <- evalIntExp r
                                  return (e1 == e2)
+evalBoolExp (NotEq l r)     = do e1 <- evalIntExp l 
+                                 e2 <- evalIntExp r 
+                                 return (e1 /= e2)

@@ -26,6 +26,7 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                                        , "~"
                                                        , "="
                                                        , "++"
+                                                       , "!="
                                                        ]
                                    }
                                  )
@@ -53,9 +54,11 @@ intcomp = try $ do t <- intexp
                    return (op t t2)
 
 -- Operador de comparacion
-
+-- falta agregar el operador != 
 compop = try (do reservedOp lis "=="
                  return Eq)
+         <|> try (do reservedOp lis "!="
+                     return NotEq)
          <|> try (do reservedOp lis "<"
                      return Less)
          <|> try (do reservedOp lis "<="
@@ -85,19 +88,16 @@ term = chainl1 factor multp
 factor :: Parser Iexp
 factor = try (parens lis intexp)
          <|> try (do reservedOp lis "-"
-                     f <- factor
-                     return (Uminus f))
+                     Uminus <$> factor)
          <|> (do n <- integer lis
                  return (Const n)
               <|> do str <- identifier lis
                      return (Variable str))
 
-
 sumap = do try (reservedOp lis "+")
            return Plus
         <|> do try (reservedOp lis "-")
                return Minus
-
 
 multp = do try (reservedOp lis "*")
            return Times
@@ -143,7 +143,7 @@ cmdparser = try (do reserved lis "if"
                         whiteSpace lis
                         char '{'
                         whiteSpace lis
-                        cmd <- cmdparser
+                        cmd <- cmdparse
                         char '}'
                         whiteSpace lis
                         return (For f cmd)

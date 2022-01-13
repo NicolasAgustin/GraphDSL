@@ -21,6 +21,7 @@ data Bexp = Btrue
             | Less Iexp Iexp 
             | LessEq Iexp Iexp 
             | Eq Iexp Iexp 
+            | NotEq Iexp Iexp
             deriving (Show, Eq)
 
 data Cmd = Let Var Iexp
