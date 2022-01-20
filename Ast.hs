@@ -24,7 +24,16 @@ data Bexp = Btrue
             | NotEq Iexp Iexp
             deriving (Show, Eq)
 
+-- Para solucionar el error de las definiciones de int o string se deberia anteponer la palabra strin o int en las definiciones
+-- para eso se debe modificar el ast
+
+data StringExp = Str String
+                 | VariableStr Var
+                 | Concat StringExp StringExp 
+                 deriving (Show, Eq)
+
 data Cmd = Let Var Iexp
+           | LetStr Var StringExp
            | If Bexp Cmd Cmd 
            | For Forcond Cmd 
            | Seq Cmd Cmd 

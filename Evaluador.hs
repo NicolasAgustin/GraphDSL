@@ -1,32 +1,42 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -Wno-missing-methods #-}
 module Evaluador where
 import Control.Applicative (pure, (<*>))
 import Control.Monad (liftM, ap, when)
+import Control.Monad.Except (ExceptT)
 import Ast
 import Parser
+import Control.Error (handleExceptT)
 
-data Econtrol a = Fine a
-                | Error String
-                | State [(String, Integer)]
-                deriving Show
+type Env = [(String, DataType')]
 
-type Env = [(String, Integer)]
+data EvalError = DivideByZero | VariableNotDefined String deriving Show
 
 type VariableF = (String, Integer)
 
+data DataType' = Entero Integer | Cadena String deriving (Show)
+
+{- TODO:
+    - Ver como evaluar los diferentes tipos, los datatype se pueden manejar con case of
+    - Ver como implementar los errores parametrizados -> podria ser seteando una variable de sistema como COUNTER pero para llevar los errores
+       entonces cuando hay que tirar un error vamos y recuperamos el error que tiro de esa variable
+       implicaria hacer un update de la variable ERROR y luego hacer un lookfor para el throw (dentro de la monada) -}
+
+instance Eq DataType' where
+    (==) (Entero _) (Entero _) = True
+    (==) (Entero _) (Cadena _) = False
+    (==) (Cadena _) (Entero _) = False
+    (==) (Cadena _) (Cadena _) = True
+
 initState :: Env
-initState = [("COUNTER", 0)]
+initState = [("COUNTER", Entero 0), ("ERR", Cadena "")]
 
 newtype Id a = Id a
 runId :: Id a -> a
 runId (Id a) = a
 
 -- En versiones nuevas del ghc para definir una monada tambien necesitas definirlo como functor y como applicative
-
--- instance Monad Econtrol where
---     return x        = Fine x
---     Fine x >>= f    = f x
---     Error stk >>= f = Error stk
 
 instance Functor Set where
     fmap = liftM
@@ -35,79 +45,104 @@ instance Applicative Set where
     pure  = return
     (<*>) = ap
 
-newtype Set a = Set { runSet :: Env -> Maybe (a, Env, Integer) }
+newtype Set a = Set { runSet :: Env -> Either String (a, Env, Integer)}
 
 instance Monad Set where
-    return x = Set (\s -> Just (x, s, 0))
-    m >>= f  = Set (\s -> do (v, s', t) <- runSet m s
-                             (v', s'', t') <- runSet (f v) s'
-                             return (v', s'', t+t'))
+    return x            = Set (\s -> Right (x, s, 0))
+    m >>= f = Set (\s -> case runSet m s of
+                            Left e           -> Left e
+                            Right (a, s', i) -> case runSet (f a) s' of
+                                                    Left e' -> Left e'
+                                                    Right (b, s'', i') -> Right (b, s'', i' + i))     
+{- m es un Set a, por lo que con (runSet m) devolvemos una funcion que toma como argumento el estado osea s -}
+
 
 class Monad m => MonadState m where
-    lookfor :: String -> m Integer
-    update :: String -> Integer -> m ()
+    lookfor :: String -> m DataType'
+    update :: String -> DataType' -> m ()
+
+lookf :: String -> Env -> Either String DataType'
+lookf var [] = Left "Variable no definida"
+lookf var ((var', val):ss) | var == var' = Right val
+                           | otherwise = lookf var ss
+
+update' :: String -> DataType' -> Env -> Env
+update' var val [] = [(var, val)]
+update' var val ((var', val'):ss) | var == var' = (var, val):ss
+                                  | otherwise   = (var', val'):update' var val ss
 
 instance MonadState Set where
-    lookfor var = Set (\s -> maybe Nothing (\v -> Just (v, s, 0)) (lookfor' var s))
-                        where lookfor' var [] = Nothing
-                              lookfor' var ((var', val):ss) | var == var' = Just val
-                                                            | otherwise = lookfor' var ss
-    update var val = Set (\s -> Just ((), update' var val s,0))
-                    where update' var val [] = [(var, val)]
-                          update' var val ((var', val'):ss) | var == var' = (var, val):ss
-                                                            | otherwise = (var', val'):update' var val ss
+    lookfor var = Set (\s -> do case lookf var s of
+                                    Left e  -> Left e
+                                    Right i -> Right (i, s, 0))
+
+    update var val = Set (\s -> let r = update' var val s
+                                   in Right ((), r, 0))
 
 class Monad m => MonadError m where
     throw :: m a
 
+lookupError :: Env -> DataType'
+lookupError ((i, v):r) = if i == "ERR" then v else lookupError r
+
 instance MonadError Set where
-    throw = Set (const Nothing)
+    throw = Set (\s -> let err = lookupError s 
+                        in case err of
+                            Cadena e -> Left e)
 
 class Monad m => MonadTick m where
     tick :: m ()
+    getTick :: m () -> m Integer
 
 instance MonadTick Set where
-    tick = Set (\s -> Just ((), s, 1))
+    tick = Set (\s -> Right ((), s, 1))
 
-eval :: Cmd -> (Env, Integer)
+eval :: Cmd -> Either String (Env, Integer)
 eval p = case runSet (evalComm p) initState of
-            Just (v, s, t) -> (s, t)
-            Nothing        -> error "Error"
+            Right (v, s, t) -> Right (s, t)
+            Left e          -> Left e
 
 evalComm :: (MonadState m, MonadError m, MonadTick m) => Cmd -> m ()
-evalComm Pass           = return ()
-evalComm (Let v e)      = do val <- evalIntExp e
-                             update v val
-evalComm (Seq l r)      = do evalComm l
-                             evalComm r
-evalComm (If b tc fc)   = do bval <- evalBoolExp b
-                             if bval then evalComm tc
-                             else evalComm fc
-evalComm (For b c)      = do (var, value) <- evalForDef $ (\(Forc d _ _) -> d) b
-                             counter <- lookfor "COUNTER"
-                             if counter == 0 then update var value
-                             else tick -- este tick no deberia ir, pero todavia no se que iria en este else
-                             condicion <- evalForCondition $ (\(Forc _ c _) -> c) b
-                             (var2, value2) <- evalForInc $ (\(Forc _ _ i) -> i) b
-                             when condicion $ do update var2 value2
-                                                 update "COUNTER" (counter + 1)
-                                                 evalComm (Seq c (For b c))
+evalComm Pass            = return ()
+evalComm (Let v e)       = do val <- evalIntExp e
+                              upRes <- update v (Entero val)
+                              return upRes
+evalComm (LetStr v stre) = do str <- evalStrExp stre
+                              upRes <- update v (Cadena str)
+                              return upRes
+evalComm (Seq l r)       = do evalComm l
+                              evalComm r
+evalComm (If b tc fc)    = do bval <- evalBoolExp b
+                              if bval then evalComm tc
+                              else evalComm fc
+evalComm (For b c)       = do (var, value) <- evalForDef $ (\(Forc d _ _) -> d) b
+                              counter <- lookfor "COUNTER"
+                              case counter of
+                                  Entero valor -> do when (valor == 0) $ update var (Entero value)
+                                                     condicion <- evalForCondition $ (\(Forc _ c _) -> c) b
+                                                     (var', value') <- evalForInc $ (\(Forc _ _ i) -> i) b
+                                                     when condicion $ do update var' (Entero value')
+                                                                         update "COUNTER" (Entero (valor + 1))
+                                                                         evalComm (Seq c (For b c))
+                                  Cadena str -> throw
+
 
 evalForCond :: (MonadState m, MonadError m, MonadTick m) => Forcond -> m (VariableF, Bool, VariableF)
 evalForCond (Forc d c i) = do t <- evalForDef d
                               b <- evalForCondition c
-                              {- Tira error porque al momento de evaluar la expresion no encuentra la variable
-                              hay que ver como definir la variable en el momento de evalForDef, para que de esta
-                              forma la variable ya quede definida y luego no tire error 
-                              
-                              - en evalComm llamar a evalForDef por separado, hacer un update con esa variable para
-                              definirla y luego seguir con el resto
-                              
-                              -}
                               t2 <- evalForInc i
                               return (t, b, t2)
+--                               {- Tira error porque al momento de evaluar la expresion no encuentra la variable
+--                               hay que ver como definir la variable en el momento de evalForDef, para que de esta
+--                               forma la variable ya quede definida y luego no tire error 
 
--- Aca devolvemos el nombre de la variable para poder pasarsela al evaluador de incremento
+--                               - en evalComm llamar a evalForDef por separado, hacer un update con esa variable para
+--                               definirla y luego seguir con el resto
+
+--                               -}
+
+
+-- -- Aca devolvemos el nombre de la variable para poder pasarsela al evaluador de incremento
 evalForDef :: (MonadState m, MonadError m, MonadTick m) => Definicion -> m VariableF
 evalForDef (Def2 var exp) = do valor <- evalIntExp exp
                                return (var, valor)
@@ -119,6 +154,16 @@ evalForInc :: (MonadState m, MonadError m, MonadTick m) => Definicion -> m Varia
 evalForInc (Def2 var exp) = do valor <- evalIntExp exp
                                return (var, valor)
 
+evalStrExp :: (MonadState m, MonadError m, MonadTick m) => StringExp -> m String
+evalStrExp (Str s)          = return s
+evalStrExp (Concat l r)     = do sl <- evalStrExp l 
+                                 sr <- evalStrExp r
+                                 return (sl ++ sr)
+evalStrExp (VariableStr sv) = do r <- lookfor sv
+                                 case r of 
+                                     Cadena str -> return str
+                                     Entero i   -> do update "ERR" (Cadena "No coinciden los tipos")
+                                                      throw -- cuidado porque se le puede pasar un nombre de variable entera, en ese caso deberia tirar error
 evalIntExp :: (MonadState m, MonadError m, MonadTick m) => Iexp -> m Integer
 evalIntExp (Const n)    = return n
 evalIntExp (Plus l r)   = do e1 <- evalIntExp l
@@ -129,13 +174,19 @@ evalIntExp (Minus l r)  = do e1 <- evalIntExp l
                              return (e1 - e2)
 evalIntExp (Div l r)    = do e1 <- evalIntExp l
                              e2 <- evalIntExp r
-                             return (e1 `div` e2)
+                             if e2 == 0 then do update "ERR" (Cadena "No se puede dividir por cero.")
+                                                throw
+                             else return (e1 `div` e2)
 evalIntExp (Times l r)  = do e1 <- evalIntExp l
                              e2 <- evalIntExp r
-                             return (e1 * e2)
+                             return (e1 `div` e2)
 evalIntExp (Uminus l)   = do e1 <- evalIntExp l
                              return (negate e1)
-evalIntExp (Variable v) = do lookfor v
+evalIntExp (Variable v) = do r <- lookfor v
+                             case r of
+                                 Entero e  -> return e
+                                 Cadena str -> do update "ERR" (Cadena "No coinciden los tipos")
+                                                  throw
 
 evalBoolExp :: (MonadState m, MonadError m, MonadTick m) => Bexp -> m Bool
 evalBoolExp Btrue           = return True
@@ -163,6 +214,6 @@ evalBoolExp (LessEq l r)    = do e1 <- evalIntExp l
 evalBoolExp (Eq l r)        = do e1 <- evalIntExp l
                                  e2 <- evalIntExp r
                                  return (e1 == e2)
-evalBoolExp (NotEq l r)     = do e1 <- evalIntExp l 
-                                 e2 <- evalIntExp r 
+evalBoolExp (NotEq l r)     = do e1 <- evalIntExp l
+                                 e2 <- evalIntExp r
                                  return (e1 /= e2)

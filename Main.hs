@@ -5,6 +5,7 @@ import System.Environment (getArgs)
 import Ast
 import Parser
 import Evaluador
+import Data.Data (Data, DataType)
 ---------------------------------------------------------
 
 main :: IO ()
@@ -16,6 +17,9 @@ run :: [Char] -> IO ()
 run ifile = do s <- readFile ifile
                case parseComm ifile s of
                 Left error -> print error
-                Right t    -> print $ eval t
+                -- Right t    -> print t
+                Right t    -> case eval t of 
+                                Left err -> print err 
+                                Right r  -> print r
     --   Right t    -> print (eval t) --imprimir el resultado de evaluar.
       --Right t    -> print t        --imprimir sin evaluar (para testear Parser)

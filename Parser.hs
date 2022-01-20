@@ -5,12 +5,17 @@ import Text.Parsec.Language (emptyDef)
 import Ast
 import Text.Parsec.Char
 
+{-
+        TODO: 
+        - Revisar definiciones, porque cada vez que asigne una variable voy a tener que escribir int o string y eso solamente deberia hacerlo una vez
+-}
+
 -- Analizador de Tokens
 lis :: TokenParser u
 lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                   , reservedNames = ["true","false","pass","if",
                                                      "then","else","end",
-                                                     "for", "or", "and", "not"]
+                                                     "for", "or", "and", "not", "string", "int"]
                                   , reservedOpNames = [  "+"
                                                        , "-"
                                                        , "*"
@@ -30,6 +35,26 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                                        ]
                                    }
                                  )
+
+strexp :: Parser StringExp 
+strexp = chainl1 strexp2 $ try (do whiteSpace lis
+                                   reserved lis "&"
+                                   whiteSpace lis
+                                   return Concat)
+
+-- Tira error porque la definicion de una variable de tipo string es igual a la definicion de una variable de tipo int
+-- deberiamos determinar una forma de chequear de que tipo es la variable 
+strexp2 :: Parser StringExp 
+strexp2 = try (do whiteSpace lis
+                  strvar <- identifier lis
+                  whiteSpace lis
+                  return (VariableStr strvar))
+          <|> try (do whiteSpace lis
+                      char '\"'
+                      s <- many $ noneOf "\""
+                      char '\"'
+                      whiteSpace lis
+                      return (Str s))
 
 -- Primero parsea or y baja un orden sintactico con chainl 
 boolexp :: Parser Bexp
@@ -54,7 +79,6 @@ intcomp = try $ do t <- intexp
                    return (op t t2)
 
 -- Operador de comparacion
--- falta agregar el operador != 
 compop = try (do reservedOp lis "=="
                  return Eq)
          <|> try (do reservedOp lis "!="
@@ -148,9 +172,14 @@ cmdparser = try (do reserved lis "if"
                         whiteSpace lis
                         return (For f cmd)
                         )
-            <|> try (do str <- identifier lis
+            <|> try (do tipo <- reserved lis "int"
+                        str <- identifier lis
                         r <- reservedOp lis "="
                         Let str <$> intexp)
+            <|> try (do tipo <- reserved lis "string"
+                        str <- identifier lis
+                        r <- reservedOp lis "="
+                        LetStr str <$> strexp)
 
 forp :: Parser Forcond
 forp = do def <- forDefParser
@@ -160,7 +189,8 @@ forp = do def <- forDefParser
           Forc def cond <$> forIncParser
 
 forDefParser :: Parser Definicion
-forDefParser = try (do str <- identifier lis
+forDefParser = try (do reserved lis "int"
+                       str <- identifier lis
                        reservedOp lis "="
                        Def2 str <$> intexp)
 
