@@ -21,7 +21,8 @@ data DataType' = Entero Integer | Cadena String deriving (Show)
     - Ver como evaluar los diferentes tipos, los datatype se pueden manejar con case of
     - Ver como implementar los errores parametrizados -> podria ser seteando una variable de sistema como COUNTER pero para llevar los errores
        entonces cuando hay que tirar un error vamos y recuperamos el error que tiro de esa variable
-       implicaria hacer un update de la variable ERROR y luego hacer un lookfor para el throw (dentro de la monada) -}
+       implicaria hacer un update de la variable ERROR y luego hacer un lookfor para el throw (dentro de la monada) 
+    - Revisar si el control de errores funciona dentro del if y del for -}
 
 instance Eq DataType' where
     (==) (Entero _) (Entero _) = True
@@ -53,7 +54,7 @@ instance Monad Set where
                             Left e           -> Left e
                             Right (a, s', i) -> case runSet (f a) s' of
                                                     Left e' -> Left e'
-                                                    Right (b, s'', i') -> Right (b, s'', i' + i))     
+                                                    Right (b, s'', i') -> Right (b, s'', i' + i))
 {- m es un Set a, por lo que con (runSet m) devolvemos una funcion que toma como argumento el estado osea s -}
 
 
@@ -66,10 +67,13 @@ lookf var [] = Left "Variable no definida"
 lookf var ((var', val):ss) | var == var' = Right val
                            | otherwise = lookf var ss
 
-update' :: String -> DataType' -> Env -> Env
-update' var val [] = [(var, val)]
-update' var val ((var', val'):ss) | var == var' = (var, val):ss
-                                  | otherwise   = (var', val'):update' var val ss
+update' :: String -> DataType' -> Env -> Either String Env
+update' var val [] = Right [(var, val)]
+update' var val ((var', val'):ss) | var == var' = if val' == val then Right ((var, val):ss) else Left ""
+                                  | otherwise   = case update' var val ss of
+                                                    Left e  -> Left e
+                                                    Right r -> Right ((var', val'):r)
+                                    --   Right $ (var', val'):update' var val ss
 
 instance MonadState Set where
     lookfor var = Set (\s -> do case lookf var s of
@@ -77,7 +81,9 @@ instance MonadState Set where
                                     Right i -> Right (i, s, 0))
 
     update var val = Set (\s -> let r = update' var val s
-                                   in Right ((), r, 0))
+                                   in case r of
+                                       Left err  -> Left err
+                                       Right res -> Right ((), res, 0))
 
 class Monad m => MonadError m where
     throw :: m a
@@ -86,7 +92,7 @@ lookupError :: Env -> DataType'
 lookupError ((i, v):r) = if i == "ERR" then v else lookupError r
 
 instance MonadError Set where
-    throw = Set (\s -> let err = lookupError s 
+    throw = Set (\s -> let err = lookupError s
                         in case err of
                             Cadena e -> Left e)
 
@@ -105,11 +111,9 @@ eval p = case runSet (evalComm p) initState of
 evalComm :: (MonadState m, MonadError m, MonadTick m) => Cmd -> m ()
 evalComm Pass            = return ()
 evalComm (Let v e)       = do val <- evalIntExp e
-                              upRes <- update v (Entero val)
-                              return upRes
+                              update v (Entero val)
 evalComm (LetStr v stre) = do str <- evalStrExp stre
-                              upRes <- update v (Cadena str)
-                              return upRes
+                              update v (Cadena str)
 evalComm (Seq l r)       = do evalComm l
                               evalComm r
 evalComm (If b tc fc)    = do bval <- evalBoolExp b
@@ -125,7 +129,6 @@ evalComm (For b c)       = do (var, value) <- evalForDef $ (\(Forc d _ _) -> d) 
                                                                          update "COUNTER" (Entero (valor + 1))
                                                                          evalComm (Seq c (For b c))
                                   Cadena str -> throw
-
 
 evalForCond :: (MonadState m, MonadError m, MonadTick m) => Forcond -> m (VariableF, Bool, VariableF)
 evalForCond (Forc d c i) = do t <- evalForDef d
@@ -156,11 +159,11 @@ evalForInc (Def2 var exp) = do valor <- evalIntExp exp
 
 evalStrExp :: (MonadState m, MonadError m, MonadTick m) => StringExp -> m String
 evalStrExp (Str s)          = return s
-evalStrExp (Concat l r)     = do sl <- evalStrExp l 
+evalStrExp (Concat l r)     = do sl <- evalStrExp l
                                  sr <- evalStrExp r
                                  return (sl ++ sr)
 evalStrExp (VariableStr sv) = do r <- lookfor sv
-                                 case r of 
+                                 case r of
                                      Cadena str -> return str
                                      Entero i   -> do update "ERR" (Cadena "No coinciden los tipos")
                                                       throw -- cuidado porque se le puede pasar un nombre de variable entera, en ese caso deberia tirar error
@@ -179,9 +182,12 @@ evalIntExp (Div l r)    = do e1 <- evalIntExp l
                              else return (e1 `div` e2)
 evalIntExp (Times l r)  = do e1 <- evalIntExp l
                              e2 <- evalIntExp r
-                             return (e1 `div` e2)
+                             return (e1 * e2)
 evalIntExp (Uminus l)   = do e1 <- evalIntExp l
                              return (negate e1)
+evalIntExp (Len str)    = do s <- evalStrExp str
+                             return (toInteger $ length s)
+
 evalIntExp (Variable v) = do r <- lookfor v
                              case r of
                                  Entero e  -> return e

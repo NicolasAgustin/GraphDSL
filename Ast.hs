@@ -2,6 +2,8 @@ module Ast where
 
 type Var = String 
 
+data GenExpType = ExpStr StringExp | ExpInt Iexp deriving (Show, Eq)
+
 data Iexp = Plus Iexp Iexp 
             | Minus Iexp Iexp 
             | Div Iexp Iexp 
@@ -9,6 +11,7 @@ data Iexp = Plus Iexp Iexp
             | Uminus Iexp
             | Const Integer 
             | Variable Var 
+            | Len StringExp
             deriving (Show, Eq)
 
 data Bexp = Btrue 
@@ -24,16 +27,18 @@ data Bexp = Btrue
             | NotEq Iexp Iexp
             deriving (Show, Eq)
 
--- Para solucionar el error de las definiciones de int o string se deberia anteponer la palabra strin o int en las definiciones
--- para eso se debe modificar el ast
-
 data StringExp = Str String
                  | VariableStr Var
                  | Concat StringExp StringExp 
                  deriving (Show, Eq)
 
-data Cmd = Let Var Iexp
-           | LetStr Var StringExp
+{- Para poder solucionar el error de la asignacion, necesito un tipo que generalice StringExp y Iexp -}
+-- Luego el valor de esta expresion se evaluara en tiempo de evaluacion y se va a determinar el tipo de la asignacion y el tipo de la variable a la que
+--  se quiere asignar
+
+data Cmd = Let Var Iexp                 -- Definicion
+           | LetStr Var StringExp       -- Definicion
+           | Assign Var GenExpType      -- Asignacion
            | If Bexp Cmd Cmd 
            | For Forcond Cmd 
            | Seq Cmd Cmd 
@@ -47,7 +52,7 @@ data Forcond = Def Var Iexp
                | Forc Definicion Condicion Definicion 
                deriving (Show, Eq)
 
-data Definicion = Def2 Var Iexp deriving (Show, Eq)
+data Definicion = Def2 Var Iexp | DefS Var StringExp deriving (Show, Eq)
 
 data Condicion = Cond Bexp deriving (Show, Eq)
 

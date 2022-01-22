@@ -4,6 +4,11 @@ import Text.Parsec.Token
 import Text.Parsec.Language (emptyDef)
 import Ast
 import Text.Parsec.Char
+import Text.Parsec (modifyState, ParsecT)
+
+data Types = PEntero | PCadena deriving (Show, Eq)
+
+type ParseState = [(String, Types)]
 
 {-
         TODO: 
@@ -32,27 +37,25 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                                        , "="
                                                        , "++"
                                                        , "!="
+                                                       , "len"
                                                        ]
                                    }
                                  )
 
-strexp :: Parser StringExp 
-strexp = chainl1 strexp2 $ try (do whiteSpace lis
-                                   reserved lis "&"
-                                   whiteSpace lis
-                                   return Concat)
+
+
+strexp :: Parser StringExp
+strexp = try $ chainl1 strexp2 (try (do whiteSpace lis; reserved lis "&";whiteSpace lis; return Concat))
 
 -- Tira error porque la definicion de una variable de tipo string es igual a la definicion de una variable de tipo int
 -- deberiamos determinar una forma de chequear de que tipo es la variable 
-strexp2 :: Parser StringExp 
+strexp2 :: Parser StringExp
 strexp2 = try (do whiteSpace lis
                   strvar <- identifier lis
                   whiteSpace lis
                   return (VariableStr strvar))
           <|> try (do whiteSpace lis
-                      char '\"'
-                      s <- many $ noneOf "\""
-                      char '\"'
+                      s <- between (char '\"') (char '\"') (many $ noneOf "\"")
                       whiteSpace lis
                       return (Str s))
 
@@ -77,6 +80,7 @@ intcomp = try $ do t <- intexp
                    op <- compop
                    t2 <- intexp
                    return (op t t2)
+
 
 -- Operador de comparacion
 compop = try (do reservedOp lis "=="
@@ -104,29 +108,33 @@ notp = try $ do reservedOp lis "not"
                 Not <$> boolexp3
 
 intexp :: Parser Iexp
-intexp = chainl1 term sumap
+intexp = try (chainl1 term sumap)
 
 term :: Parser Iexp
-term = chainl1 factor multp
+term = try (chainl1 factor multp)
 
 factor :: Parser Iexp
 factor = try (parens lis intexp)
          <|> try (do reservedOp lis "-"
                      Uminus <$> factor)
-         <|> (do n <- integer lis
-                 return (Const n)
-              <|> do str <- identifier lis
-                     return (Variable str))
+         <|> try (do reservedOp lis "len"
+                     Len <$> strexp)
+         <|> try (do n <- integer lis
+                     return (Const n)
+                  <|> do str <- identifier lis
+                         return (Variable str))
 
-sumap = do try (reservedOp lis "+")
-           return Plus
-        <|> do try (reservedOp lis "-")
-               return Minus
+sumap :: Parser (Iexp -> Iexp -> Iexp)
+sumap = try (do reservedOp lis "+"
+                return Plus)
+        <|> try (do reservedOp lis "-"
+                    return Minus)
 
-multp = do try (reservedOp lis "*")
-           return Times
-        <|> do try (reservedOp lis "/")
-               return Div
+multp :: Parser (Iexp -> Iexp -> Iexp)
+multp = try (do reservedOp lis "*"
+                return Times)
+        <|> try (do reservedOp lis "/"
+                    return Div)
 
 -- Parser de comandos
 
@@ -137,41 +145,24 @@ cmdparse = chainl1 cmdparser (try (do reservedOp lis ";"
 cmdparser :: Parser Cmd
 cmdparser = try (do reserved lis "if"
                     whiteSpace lis
-                    char '('
-                    cond <- boolexp
-                    char ')'
+                    cond <- parens lis boolexp
                     whiteSpace lis
-                    char '{'
+                    cmd <- braces lis cmdparse
                     whiteSpace lis
-                    cmd <- cmdparse
-                    whiteSpace lis
-                    char '}'
-                    whiteSpace lis
-                    reserved lis "else"
-                    whiteSpace lis
-                    char '{'
-                    whiteSpace lis
-                    cmd2 <- cmdparse
-                    whiteSpace lis
-                    char '}'
-                    whiteSpace lis
-                    return (If cond cmd cmd2)
-                    )
+                    option (If cond cmd Pass) (try (do reserved lis "else"; whiteSpace lis; cmd2 <- braces lis cmdparse; whiteSpace lis
+                                                       return (If cond cmd cmd2))))
+                --     case pm of 
+                --             Just p -> return (If cond cmd p)
+                --             Nothing -> return (If cond cmd Pass))
             <|> try (do l <- reserved lis "pass"
                         return Pass)
             <|> try (do reserved lis "for"
                         whiteSpace lis
-                        char '('
-                        f <- forp
-                        char ')'
+                        f <- parens lis forp
                         whiteSpace lis
-                        char '{'
+                        cmd <- braces lis cmdparse
                         whiteSpace lis
-                        cmd <- cmdparse
-                        char '}'
-                        whiteSpace lis
-                        return (For f cmd)
-                        )
+                        return (For f cmd))
             <|> try (do tipo <- reserved lis "int"
                         str <- identifier lis
                         r <- reservedOp lis "="
@@ -180,6 +171,23 @@ cmdparser = try (do reserved lis "if"
                         str <- identifier lis
                         r <- reservedOp lis "="
                         LetStr str <$> strexp)
+            <|> try (do str <- identifier lis
+                        r <- reservedOp lis "="
+                        Assign str <$> genAssignExp)
+
+-- Hay que ver como resolver el error en la asignacion general
+-- Esto actualmente falla: 
+{- 
+
+string resultado = "hola";
+n = resultado & " mundo"; 
+
+debido a que solamente ejecuta el parser de int y luego falla 
+
+-}
+
+genAssignExp :: Parser GenExpType
+genAssignExp = try (do ExpStr <$> strexp) <|> (do fail "fallo en chainl"; ExpInt <$> intexp)
 
 forp :: Parser Forcond
 forp = do def <- forDefParser
@@ -189,22 +197,26 @@ forp = do def <- forDefParser
           Forc def cond <$> forIncParser
 
 forDefParser :: Parser Definicion
-forDefParser = try (do reserved lis "int"
+forDefParser = try (do optional $ try (reserved lis "int")
                        str <- identifier lis
                        reservedOp lis "="
                        Def2 str <$> intexp)
+                <|> try (do optional $ try (reserved lis "string")
+                            str <- identifier lis
+                            reservedOp lis "="
+                            DefS str <$> strexp)
 
 forCondParser :: Parser Condicion
 forCondParser = try (do Cond <$> boolexp)
 
 forIncParser :: Parser Definicion
-forIncParser = try (do str <- identifier lis 
+forIncParser = try (do str <- identifier lis
                        reservedOp lis "="
-                       Def2 str <$> intexp
-                        )
+                       Def2 str <$> intexp)
+
 totParser :: Parser a -> Parser a
 totParser p = do whiteSpace lis
-                 t <- p --let r = whiteSpace lis
+                 t <- p
                  eof
                  return t
 
