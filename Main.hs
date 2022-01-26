@@ -6,7 +6,17 @@ import Ast
 import Parser
 import Evaluador
 import Data.Data (Data, DataType)
+import Data.Set
+import Text.Parsec (runParsecT, modifyState, putState)
+import Text.Parsec.Prim (runParserT)
+import Control.Monad.Identity (runIdentity)
+import Text.Parsec (runParser)
 ---------------------------------------------------------
+
+type ParseState = [(String, Types)]
+
+initParserState :: ParseState 
+initParserState = []
 
 main :: IO ()
 main = do arg:_ <- getArgs
@@ -15,7 +25,7 @@ main = do arg:_ <- getArgs
 -- Ejecuta un programa a partir de su archivo fuente
 run :: [Char] -> IO ()
 run ifile = do s <- readFile ifile
-               case parseComm ifile s of
+               case runParser cmdparse [] ifile s of
                 Left error -> print error
                 -- Right t    -> print t
                 Right t    -> case eval t of 
