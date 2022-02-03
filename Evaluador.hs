@@ -18,10 +18,6 @@ type VariableF = (String, Integer)
 data DataType' = Entero Integer | Cadena String deriving (Show)
 
 {- TODO:
-    - Ver como evaluar los diferentes tipos, los datatype se pueden manejar con case of
-    - Ver como implementar los errores parametrizados -> podria ser seteando una variable de sistema como COUNTER pero para llevar los errores
-       entonces cuando hay que tirar un error vamos y recuperamos el error que tiro de esa variable
-       implicaria hacer un update de la variable ERROR y luego hacer un lookfor para el throw (dentro de la monada) 
     - Revisar si el control de errores funciona dentro del if y del for -}
 
 instance Eq DataType' where
@@ -135,15 +131,6 @@ evalForCond (Forc d c i) = do t <- evalForDef d
                               b <- evalForCondition c
                               t2 <- evalForInc i
                               return (t, b, t2)
---                               {- Tira error porque al momento de evaluar la expresion no encuentra la variable
---                               hay que ver como definir la variable en el momento de evalForDef, para que de esta
---                               forma la variable ya quede definida y luego no tire error 
-
---                               - en evalComm llamar a evalForDef por separado, hacer un update con esa variable para
---                               definirla y luego seguir con el resto
-
---                               -}
-
 
 -- -- Aca devolvemos el nombre de la variable para poder pasarsela al evaluador de incremento
 evalForDef :: (MonadState m, MonadError m, MonadTick m) => Definicion -> m VariableF
@@ -166,7 +153,8 @@ evalStrExp (VariableStr sv) = do r <- lookfor sv
                                  case r of
                                      Cadena str -> return str
                                      Entero i   -> do update "ERR" (Cadena "No coinciden los tipos")
-                                                      throw -- cuidado porque se le puede pasar un nombre de variable entera, en ese caso deberia tirar error
+                                                      throw
+
 evalIntExp :: (MonadState m, MonadError m, MonadTick m) => Iexp -> m Integer
 evalIntExp (Const n)    = return n
 evalIntExp (Plus l r)   = do e1 <- evalIntExp l
@@ -220,6 +208,12 @@ evalBoolExp (LessEq l r)    = do e1 <- evalIntExp l
 evalBoolExp (Eq l r)        = do e1 <- evalIntExp l
                                  e2 <- evalIntExp r
                                  return (e1 == e2)
+evalBoolExp (EqStr l r)        = do e1 <- evalStrExp l
+                                    e2 <- evalStrExp r
+                                    return (e1 == e2)
+evalBoolExp (NotEqStr l r)        = do e1 <- evalStrExp l
+                                       e2 <- evalStrExp r
+                                       return (e1 /= e2)
 evalBoolExp (NotEq l r)     = do e1 <- evalIntExp l
                                  e2 <- evalIntExp r
                                  return (e1 /= e2)

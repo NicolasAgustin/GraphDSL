@@ -24,7 +24,9 @@ data Bexp = Btrue
             | Less Iexp Iexp 
             | LessEq Iexp Iexp 
             | Eq Iexp Iexp 
+            | EqStr StringExp StringExp
             | NotEq Iexp Iexp
+            | NotEqStr StringExp StringExp
             deriving (Show, Eq)
 
 data StringExp = Str String

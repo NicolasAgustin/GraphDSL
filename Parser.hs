@@ -9,11 +9,6 @@ import Control.Monad (liftM, ap, when)
 
 data Types = PEntero | PCadena deriving (Show, Eq)
 
-{-
-        TODO: 
-        - Revisar definiciones, porque cada vez que asigne una variable voy a tener que escribir int o string y eso solamente deberia hacerlo una vez
--}
-
 -- Analizador de Tokens
 lis :: TokenParser u
 lis = makeTokenParser (emptyDef   { commentLine   = "#"
@@ -47,8 +42,6 @@ type Parser' = Parsec String [(String, Types)]
 strexp :: Parser' StringExp
 strexp = try $ chainl1 strexp2 (try (do whiteSpace lis; reserved lis "&";whiteSpace lis; return Concat))
 
--- Tira error porque la definicion de una variable de tipo string es igual a la definicion de una variable de tipo int
--- deberiamos determinar una forma de chequear de que tipo es la variable 
 strexp2 :: Parser' StringExp
 strexp2 = try (do whiteSpace lis
                   strvar <- identifier lis
@@ -59,11 +52,10 @@ strexp2 = try (do whiteSpace lis
                       whiteSpace lis
                       return (Str s))
 
--- Primero parsea or y baja un orden sintactico con chainl 
 boolexp :: Parser' Bexp
 boolexp = chainl1 boolexp2 $ try (do reserved lis "or"
                                      return Or)
--- por segundo parsea and y baja un orden sintactico
+
 boolexp2 :: Parser' Bexp
 boolexp2 = chainl1 boolexp3 $ try (do reserved lis "and"
                                       return And)
@@ -72,15 +64,31 @@ boolexp3 :: Parser' Bexp
 boolexp3 = try (parens lis boolexp)
            <|> notp
            <|> intcomp
+           <|> strcomp
            <|> bvalue
+
+-- Comparacion strings
+strcomp :: Parser' Bexp 
+strcomp = try (do s1 <- strexp 
+                  op <- compopStr
+                  s2 <- strexp 
+                  return (op s1 s2))
+          <|> try (do s1 <- strexp 
+                      op <- compop
+                      s2 <- strexp 
+                      return (op (Len s1) (Len s2)))
 
 -- Comparacion entera
 intcomp :: Parser' Bexp
-intcomp = try $ do t <- intexp
-                   op <- compop
-                   t2 <- intexp
-                   return (op t t2)
+intcomp = try (do t <- intexp
+                  op <- compop
+                  t2 <- intexp
+                  return (op t t2))
 
+compopStr = try (do reservedOp lis "=="
+                    return EqStr)
+            <|> try (do reservedOp lis "!="
+                        return NotEqStr)
 
 -- Operador de comparacion
 compop = try (do reservedOp lis "=="
@@ -122,7 +130,10 @@ factor = try (parens lis intexp)
          <|> try (do n <- integer lis
                      return (Const n)
                   <|> do str <- identifier lis
-                         return (Variable str))
+                         st <- getState
+                         case lookforPState str st of
+                            PCadena -> fail "Int expected"
+                            PEntero -> return (Variable str))
 
 sumap :: Parser' (Iexp -> Iexp -> Iexp)
 sumap = try (do reservedOp lis "+"
@@ -151,9 +162,6 @@ cmdparser = try (do reserved lis "if"
                     whiteSpace lis
                     option (If cond cmd Pass) (try (do reserved lis "else"; whiteSpace lis; cmd2 <- braces lis cmdparse; whiteSpace lis
                                                        return (If cond cmd cmd2))))
-                --     case pm of 
-                --             Just p -> return (If cond cmd p)
-                --             Nothing -> return (If cond cmd Pass))
             <|> try (do l <- reserved lis "pass"
                         return Pass)
             <|> try (do reserved lis "for"
@@ -189,27 +197,6 @@ updatePState str tipo ((x,y):xs) = if str == x then (x, tipo):xs else (x,y):upda
 lookforPState :: String -> [(String, Types)] -> Types
 lookforPState str []          = error $ "Variable no encontrada en el estado: " ++ str
 lookforPState str ((x, y):xs) = if str == x then y else lookforPState str xs
-
--- lookforPState :: String -> 
-
--- Hay que ver como resolver el error en la asignacion general
--- Esto actualmente falla: 
-{- 
-
-int a = 0;
-
-a = 0
-
-Let a (Const 0)
-
-LetStr a (Str "")
-
-string resultado = "hola";
-n = resultado & " mundo"; 
-
-debido a que solamente ejecuta el parser de int y luego falla 
-
--}
 
 genAssignExp :: Parser' GenExpType
 genAssignExp = try (do ExpStr <$> strexp) <|> (do fail "fallo en chainl"; ExpInt <$> intexp)
