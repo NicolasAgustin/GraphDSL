@@ -32,6 +32,7 @@ data Bexp = Btrue
 data StringExp = Str String
                  | VariableStr Var
                  | Concat StringExp StringExp 
+                 | StrCast Iexp
                  deriving (Show, Eq)
 
 {- Para poder solucionar el error de la asignacion, necesito un tipo que generalice StringExp y Iexp -}
@@ -44,6 +45,7 @@ data Cmd = Let Var Iexp                 -- Definicion
            | If Bexp Cmd Cmd 
            | For Forcond Cmd 
            | Seq Cmd Cmd 
+           | Print StringExp
            | Pass 
            deriving (Show, Eq)
 

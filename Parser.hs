@@ -14,7 +14,8 @@ lis :: TokenParser u
 lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                   , reservedNames = ["true","false","pass","if",
                                                      "then","else","end",
-                                                     "for", "or", "and", "not", "string", "int"]
+                                                     "for", "or", "and", "not", "string", "int",
+                                                     "print"]
                                   , reservedOpNames = [  "+"
                                                        , "-"
                                                        , "*"
@@ -51,6 +52,11 @@ strexp2 = try (do whiteSpace lis
                       s <- between (char '\"') (char '\"') (many $ noneOf "\"")
                       whiteSpace lis
                       return (Str s))
+          <|> try (do whiteSpace lis
+                      reserved lis "string"
+                      n <- parens lis intexp
+                      whiteSpace lis
+                      return (StrCast n))
 
 boolexp :: Parser' Bexp
 boolexp = chainl1 boolexp2 $ try (do reserved lis "or"
@@ -162,6 +168,11 @@ cmdparser = try (do reserved lis "if"
                     whiteSpace lis
                     option (If cond cmd Pass) (try (do reserved lis "else"; whiteSpace lis; cmd2 <- braces lis cmdparse; whiteSpace lis
                                                        return (If cond cmd cmd2))))
+            <|> try (do reserved lis "print"
+                        whiteSpace lis
+                        str <- parens lis strexp
+                        whiteSpace lis
+                        return (Print str))
             <|> try (do l <- reserved lis "pass"
                         return Pass)
             <|> try (do reserved lis "for"
@@ -212,9 +223,11 @@ forDefParser :: Parser' Definicion
 forDefParser = try (do optional $ try (reserved lis "int")
                        str <- identifier lis
                        reservedOp lis "="
+                       modifyState (updatePState str PEntero)
                        Def2 str <$> intexp)
                 <|> try (do optional $ try (reserved lis "string")
                             str <- identifier lis
+                            modifyState (updatePState str PCadena)
                             reservedOp lis "="
                             DefS str <$> strexp)
 

@@ -7,15 +7,17 @@ import Parser
 import Evaluador
 import Data.Data (Data, DataType)
 import Data.Set
-import Text.Parsec (runParsecT, modifyState, putState)
+import Text.Parsec ( runParsecT, modifyState, putState, runParser )
 import Text.Parsec.Prim (runParserT)
 import Control.Monad.Identity (runIdentity)
-import Text.Parsec (runParser)
+import Control.Error (runExceptT)
+import Conduit (MonadIO(liftIO))
+import Control.Monad.Trans.State (runStateT)
 ---------------------------------------------------------
 
 type ParseState = [(String, Types)]
 
-initParserState :: ParseState 
+initParserState :: ParseState
 initParserState = []
 
 main :: IO ()
@@ -27,7 +29,8 @@ run :: [Char] -> IO ()
 run ifile = do s <- readFile ifile
                case runParser cmdparse [] ifile s of
                 Left error -> print error
-                Right t    -> print t
-                -- Right t    -> case eval t of 
-                --                 Left err -> print err 
-                --                 Right r  -> print r
+                -- Right t    -> print t
+                Right t    -> do a <- runStateT (runExceptT (eval t)) []
+                                 case fst a of
+                                     Left e    -> putStrLn e
+                                     Right res -> return ()

@@ -1,0 +1,42 @@
+cmd = pass 
+    | if boolexp cmd else cmd 
+    | if boolexp cmd
+    | cmd; cmd 
+    | for (intexp; boolexp; intexp) cmd 
+    | int var := intexp 
+    | string var := strexp 
+    | var := strexp 
+    | var := intexp
+
+boolexp = True 
+        | False
+        | boolexp ^ boolexp
+        | boolexp v boolexp
+        | ~ boolexp         
+        | intexp = intexp 
+        | intexp < intexp 
+        | intexp /= intexp
+        | intexp <= intexp 
+        | intexp > intexp 
+        | intexp >= intexp
+        | strexp = strexp 
+        | strexp /= strexp 
+        | strexp < strexp 
+        | strexp <= strexp 
+        | strexp > strexp 
+        | strexp >= strexp 
+
+intexp = term + term 
+       | term - term 
+
+term = factor * factor
+     | factor / factor 
+
+factor = -u nat 
+       | len strexp 
+       | nat 
+       | var 
+
+strexp = strexp & strexp
+       | var 
+       | str
