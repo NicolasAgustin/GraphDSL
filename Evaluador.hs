@@ -19,6 +19,8 @@ import Control.Monad.Error (throwError)
 import Control.Monad.Trans.Error (runErrorT)
 import Control.Error ( throwE, runExceptT )
 import Control.Monad.Trans.State.Lazy (gets)
+import Control.Monad.Error (catchError)
+import Text.Read (readMaybe)
 
 type Eval a = ExceptT String (StateT Env IO) a
 
@@ -123,6 +125,9 @@ evalStrExp (VariableStr sv) = do r <- lift $ gets (lookState sv)
                                                       throwE "No coinciden los tipos"
 evalStrExp (StrCast n)      = do res <- evalIntExp n
                                  return (show res)
+evalStrExp (Input str)      = do prompt <- evalStrExp str 
+                                 lift.lift $ putStr prompt 
+                                 lift.lift $ getLine  
 
 evalIntExp :: Iexp -> Eval Integer
 evalIntExp (Const n)    = return n
@@ -137,15 +142,19 @@ evalIntExp (Div l r)    = do e1 <- evalIntExp l
                              if e2 == 0 then do modify (updateState "ERR" (Cadena "No se puede dividir por cero"))
                                                 throwE "No se puede dividir por cero"
                              else return (e1 `div` e2)
-evalIntExp (Times l r)  = do e1 <- evalIntExp l
-                             e2 <- evalIntExp r
-                             return (e1 * e2)
-evalIntExp (Uminus l)   = do e1 <- evalIntExp l
-                             return (negate e1)
-evalIntExp (Len str)    = do s <- evalStrExp str
-                             return (toInteger $ length s)
-evalIntExp (Variable v) = do r <- lift $ gets (lookState v)
-                             case r of
+evalIntExp (Times l r)   = do e1 <- evalIntExp l
+                              e2 <- evalIntExp r
+                              return (e1 * e2)
+evalIntExp (Uminus l)    = do e1 <- evalIntExp l
+                              return (negate e1)
+evalIntExp (Len str)     = do s <- evalStrExp str
+                              return (toInteger $ length s)
+evalIntExp (IntCast str) = do s <- evalStrExp str
+                              case readMaybe s of
+                                    Just num -> return num
+                                    Nothing  -> throwE ("Error al castear la string \"" ++ s ++ "\"")
+evalIntExp (Variable v)  = do r <- lift $ gets (lookState v)
+                              case r of
                                  Entero e  -> return e
                                  Cadena str -> do modify (updateState "ERR" (Cadena "No coinciden los tipos"))
                                                   throwE "No coinciden los tipos"

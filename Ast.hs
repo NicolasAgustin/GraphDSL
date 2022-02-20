@@ -12,6 +12,7 @@ data Iexp = Plus Iexp Iexp
             | Const Integer 
             | Variable Var 
             | Len StringExp
+            | IntCast StringExp
             deriving (Show, Eq)
 
 data Bexp = Btrue 
@@ -33,6 +34,7 @@ data StringExp = Str String
                  | VariableStr Var
                  | Concat StringExp StringExp 
                  | StrCast Iexp
+                 | Input StringExp
                  deriving (Show, Eq)
 
 {- Para poder solucionar el error de la asignacion, necesito un tipo que generalice StringExp y Iexp -}

@@ -15,7 +15,7 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                   , reservedNames = ["true","false","pass","if",
                                                      "then","else","end",
                                                      "for", "or", "and", "not", "string", "int",
-                                                     "print"]
+                                                     "print", "input"]
                                   , reservedOpNames = [  "+"
                                                        , "-"
                                                        , "*"
@@ -57,6 +57,9 @@ strexp2 = try (do whiteSpace lis
                       n <- parens lis intexp
                       whiteSpace lis
                       return (StrCast n))
+          <|> try (do reserved lis "input"
+                      whiteSpace lis 
+                      option (Input (Str "")) (try (do str <- parens lis strexp; whiteSpace lis; return (Input str))))
 
 boolexp :: Parser' Bexp
 boolexp = chainl1 boolexp2 $ try (do reserved lis "or"
@@ -133,6 +136,9 @@ factor = try (parens lis intexp)
                      Uminus <$> factor)
          <|> try (do reservedOp lis "len"
                      Len <$> strexp)
+         <|> try (do reserved lis "int"
+                     str <- parens lis strexp
+                     return (IntCast str))
          <|> try (do n <- integer lis
                      return (Const n)
                   <|> do str <- identifier lis
@@ -244,6 +250,3 @@ totParser p = do whiteSpace lis
                  t <- p
                  eof
                  return t
-
--- parseComm :: SourceName -> String -> Either ParseError Cmd
--- parseComm = parse (totParser cmdparse)
