@@ -15,11 +15,10 @@ import Control.Monad.State (StateT)
 import Control.Monad.State.Lazy
     ( modify, StateT(runStateT), put, get )
 import Data.Data (Data)
-import Control.Monad.Error (throwError)
+import Control.Monad.Error ( throwError, catchError )
 import Control.Monad.Trans.Error (runErrorT)
 import Control.Error ( throwE, runExceptT )
 import Control.Monad.Trans.State.Lazy (gets)
-import Control.Monad.Error (catchError)
 import Text.Read (readMaybe)
 
 type Eval a = ExceptT String (StateT Env IO) a
@@ -94,6 +93,12 @@ evalComm (For b c)       = do (var, value) <- evalForDef $ (\(Forc d _ _) -> d) 
                                           modify (updateState "COUNTER" (Entero (valor+1)))
                                           evalComm (Seq c (For b c))
                                   Cadena str -> throwE "Error inesperado"
+evalComm (WriteFile path tw append) = do ruta <- evalStrExp path
+                                         twrite <- evalStrExp tw
+                                         b <- evalBoolExp append
+                                         if b then lift.lift $ appendFile ruta twrite
+                                         else lift.lift $ writeFile ruta twrite
+                                         return ()
 
 evalForCond :: Forcond -> Eval (VariableF, Bool, VariableF)
 evalForCond (Forc d c i) = do t <- evalForDef d
@@ -125,9 +130,11 @@ evalStrExp (VariableStr sv) = do r <- lift $ gets (lookState sv)
                                                       throwE "No coinciden los tipos"
 evalStrExp (StrCast n)      = do res <- evalIntExp n
                                  return (show res)
-evalStrExp (Input str)      = do prompt <- evalStrExp str 
-                                 lift.lift $ putStr prompt 
-                                 lift.lift $ getLine  
+evalStrExp (Input str)      = do prompt <- evalStrExp str
+                                 lift.lift $ putStr prompt
+                                 lift.lift $ getLine
+evalStrExp (ReadFile path)  = do ruta <- evalStrExp path 
+                                 lift.lift $ readFile ruta
 
 evalIntExp :: Iexp -> Eval Integer
 evalIntExp (Const n)    = return n

@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use <$>" #-}
 module Parser where
 import Text.ParserCombinators.Parsec
 import Text.Parsec.Token
@@ -14,8 +16,8 @@ lis :: TokenParser u
 lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                   , reservedNames = ["true","false","pass","if",
                                                      "then","else","end",
-                                                     "for", "or", "and", "not", "string", "int",
-                                                     "print", "input"]
+                                                     "for", "or", "and", "not", "string", "int", "str",
+                                                     "print", "input", "write", "read"]
                                   , reservedOpNames = [  "+"
                                                        , "-"
                                                        , "*"
@@ -53,10 +55,14 @@ strexp2 = try (do whiteSpace lis
                       whiteSpace lis
                       return (Str s))
           <|> try (do whiteSpace lis
-                      reserved lis "string"
+                      reserved lis "str"
                       n <- parens lis intexp
                       whiteSpace lis
                       return (StrCast n))
+          <|> try (do whiteSpace lis
+                      reserved lis "read"
+                      path <- parens lis strexp
+                      return (ReadFile path))
           <|> try (do reserved lis "input"
                       whiteSpace lis 
                       option (Input (Str "")) (try (do str <- parens lis strexp; whiteSpace lis; return (Input str))))
@@ -144,8 +150,10 @@ factor = try (parens lis intexp)
                   <|> do str <- identifier lis
                          st <- getState
                          case lookforPState str st of
-                            PCadena -> fail "Int expected"
-                            PEntero -> return (Variable str))
+                            Left e -> fail e
+                            Right c -> case c of                                     
+                                        PCadena -> fail "Int expected"
+                                        PEntero -> return (Variable str))
 
 sumap :: Parser' (Iexp -> Iexp -> Iexp)
 sumap = try (do reservedOp lis "+"
@@ -179,12 +187,14 @@ cmdparser = try (do reserved lis "if"
                         str <- parens lis strexp
                         whiteSpace lis
                         return (Print str))
+            <|> try (do reserved lis "write"
+                        whiteSpace lis
+                        (p, tw, append) <- parens lis params
+                        return (WriteFile p tw append))
             <|> try (do l <- reserved lis "pass"
                         return Pass)
             <|> try (do reserved lis "for"
-                        whiteSpace lis
-                        f <- parens lis forp
-                        whiteSpace lis
+                        f <- between (whiteSpace lis) (whiteSpace lis) (parens lis forp)
                         cmd <- braces lis cmdparse
                         whiteSpace lis
                         return (For f cmd))
@@ -204,37 +214,55 @@ cmdparser = try (do reserved lis "if"
                         r <- reservedOp lis "="
                         st <- getState
                         case lookforPState str st of
-                            PCadena -> LetStr str <$> strexp
-                            PEntero -> Let str <$> intexp)
+                            Left e -> fail e
+                            Right c -> case c of 
+                                        PCadena -> LetStr str <$> strexp
+                                        PEntero -> Let str <$> intexp)
+
+params :: Parser' (StringExp, StringExp, Bexp)
+params = do path <- strexp
+            comma lis 
+            towrite <- strexp
+            comma lis 
+            append <- boolexp
+            return (path, towrite, append)
 
 updatePState :: String -> Types -> [(String, Types)] -> [(String, Types)]
 updatePState str tipo []         = [(str, tipo)]
 updatePState str tipo ((x,y):xs) = if str == x then (x, tipo):xs else (x,y):updatePState str tipo xs
 
-lookforPState :: String -> [(String, Types)] -> Types
-lookforPState str []          = error $ "Variable no encontrada en el estado: " ++ str
-lookforPState str ((x, y):xs) = if str == x then y else lookforPState str xs
+lookforPState :: String -> [(String, Types)] -> Either String Types
+lookforPState str []          = Left $ "Variable no encontrada en el estado: " ++ str
+lookforPState str ((x, y):xs) = if str == x then Right y else lookforPState str xs
 
 genAssignExp :: Parser' GenExpType
 genAssignExp = try (do ExpStr <$> strexp) <|> (do fail "fallo en chainl"; ExpInt <$> intexp)
 
 forp :: Parser' Forcond
-forp = do def <- forDefParser
+forp = do whiteSpace lis
+          def <- forDefParser
           char ';'
           cond <- forCondParser
           char ';'
           Forc def cond <$> forIncParser
 
 forDefParser :: Parser' Definicion
-forDefParser = try (do optional $ try (reserved lis "int")
+forDefParser = try (do whiteSpace lis
+                       optional $ try (reserved lis "int")
                        str <- identifier lis
+                       whiteSpace lis
                        reservedOp lis "="
+                       whiteSpace lis
                        modifyState (updatePState str PEntero)
                        Def2 str <$> intexp)
-                <|> try (do optional $ try (reserved lis "string")
+                <|> try (do whiteSpace lis
+                            optional $ try (reserved lis "string")
                             str <- identifier lis
+                            whiteSpace lis
                             modifyState (updatePState str PCadena)
+                            whiteSpace lis
                             reservedOp lis "="
+                            whiteSpace lis
                             DefS str <$> strexp)
 
 forCondParser :: Parser' Condicion

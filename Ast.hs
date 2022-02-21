@@ -35,6 +35,7 @@ data StringExp = Str String
                  | Concat StringExp StringExp 
                  | StrCast Iexp
                  | Input StringExp
+                 | ReadFile StringExp 
                  deriving (Show, Eq)
 
 {- Para poder solucionar el error de la asignacion, necesito un tipo que generalice StringExp y Iexp -}
@@ -48,6 +49,8 @@ data Cmd = Let Var Iexp                 -- Definicion
            | For Forcond Cmd 
            | Seq Cmd Cmd 
            | Print StringExp
+        --    path, to_write, append
+           | WriteFile StringExp StringExp Bexp
            | Pass 
            deriving (Show, Eq)
 
