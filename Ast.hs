@@ -61,7 +61,7 @@ data Forcond = Def Var Iexp
                | Forc Definicion Condicion Definicion 
                deriving (Show, Eq)
 
-data Definicion = Def2 Var Iexp | DefS Var StringExp deriving (Show, Eq)
+data Definicion = Def2 Bool Var Iexp deriving (Show, Eq)
 
 data Condicion = Cond Bexp deriving (Show, Eq)
 

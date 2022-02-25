@@ -43,7 +43,7 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
 type Parser' = Parsec String [(String, Types)]
 
 strexp :: Parser' StringExp
-strexp = try $ chainl1 strexp2 (try (do whiteSpace lis; reserved lis "&";whiteSpace lis; return Concat))
+strexp = chainl1 (try strexp2) (try (do whiteSpace lis; reserved lis "&";whiteSpace lis; return Concat))
 
 strexp2 :: Parser' StringExp
 strexp2 = try (do whiteSpace lis
@@ -64,7 +64,7 @@ strexp2 = try (do whiteSpace lis
                       path <- parens lis strexp
                       return (ReadFile path))
           <|> try (do reserved lis "input"
-                      whiteSpace lis 
+                      whiteSpace lis
                       option (Input (Str "")) (try (do str <- parens lis strexp; whiteSpace lis; return (Input str))))
 
 boolexp :: Parser' Bexp
@@ -83,14 +83,14 @@ boolexp3 = try (parens lis boolexp)
            <|> bvalue
 
 -- Comparacion strings
-strcomp :: Parser' Bexp 
-strcomp = try (do s1 <- strexp 
+strcomp :: Parser' Bexp
+strcomp = try (do s1 <- strexp
                   op <- compopStr
-                  s2 <- strexp 
+                  s2 <- strexp
                   return (op s1 s2))
-          <|> try (do s1 <- strexp 
+          <|> try (do s1 <- strexp
                       op <- compop
-                      s2 <- strexp 
+                      s2 <- strexp
                       return (op (Len s1) (Len s2)))
 
 -- Comparacion entera
@@ -150,8 +150,8 @@ factor = try (parens lis intexp)
                   <|> do str <- identifier lis
                          st <- getState
                          case lookforPState str st of
-                            Left e -> fail e
-                            Right c -> case c of                                     
+                            Nothing -> fail "Error de parseo"
+                            Just c -> case c of
                                         PCadena -> fail "Int expected"
                                         PEntero -> return (Variable str))
 
@@ -173,15 +173,17 @@ cmdparse :: Parser' Cmd
 cmdparse = chainl1 cmdparser (try (do reservedOp lis ";"
                                       return Seq))
 
+initParser :: [(String, Types)]
+initParser = [("COUNTER", PEntero), ("ERR", PCadena)]
+
 cmdparser :: Parser' Cmd
 cmdparser = try (do reserved lis "if"
                     whiteSpace lis
                     cond <- parens lis boolexp
-                    whiteSpace lis
                     cmd <- braces lis cmdparse
-                    whiteSpace lis
-                    option (If cond cmd Pass) (try (do reserved lis "else"; whiteSpace lis; cmd2 <- braces lis cmdparse; whiteSpace lis
-                                                       return (If cond cmd cmd2))))
+                    option (If cond cmd Pass) (do reserved lis "else"
+                                                  cmd2 <- braces lis cmdparse
+                                                  return (If cond cmd cmd2)))
             <|> try (do reserved lis "print"
                         whiteSpace lis
                         str <- parens lis strexp
@@ -214,16 +216,16 @@ cmdparser = try (do reserved lis "if"
                         r <- reservedOp lis "="
                         st <- getState
                         case lookforPState str st of
-                            Left e -> fail e
-                            Right c -> case c of 
+                            Nothing -> return Pass
+                            Just c -> case c of
                                         PCadena -> LetStr str <$> strexp
                                         PEntero -> Let str <$> intexp)
 
 params :: Parser' (StringExp, StringExp, Bexp)
 params = do path <- strexp
-            comma lis 
+            comma lis
             towrite <- strexp
-            comma lis 
+            comma lis
             append <- boolexp
             return (path, towrite, append)
 
@@ -231,12 +233,9 @@ updatePState :: String -> Types -> [(String, Types)] -> [(String, Types)]
 updatePState str tipo []         = [(str, tipo)]
 updatePState str tipo ((x,y):xs) = if str == x then (x, tipo):xs else (x,y):updatePState str tipo xs
 
-lookforPState :: String -> [(String, Types)] -> Either String Types
-lookforPState str []          = Left $ "Variable no encontrada en el estado: " ++ str
-lookforPState str ((x, y):xs) = if str == x then Right y else lookforPState str xs
-
-genAssignExp :: Parser' GenExpType
-genAssignExp = try (do ExpStr <$> strexp) <|> (do fail "fallo en chainl"; ExpInt <$> intexp)
+lookforPState :: String -> [(String, Types)] -> Maybe Types
+lookforPState str []          = Nothing
+lookforPState str ((x, y):xs) = if str == x then Just y else lookforPState str xs
 
 forp :: Parser' Forcond
 forp = do whiteSpace lis
@@ -248,30 +247,21 @@ forp = do whiteSpace lis
 
 forDefParser :: Parser' Definicion
 forDefParser = try (do whiteSpace lis
-                       optional $ try (reserved lis "int")
+                       result <- option False $ try (do reserved lis "int"; return True)
                        str <- identifier lis
-                       whiteSpace lis
                        reservedOp lis "="
-                       whiteSpace lis
                        modifyState (updatePState str PEntero)
-                       Def2 str <$> intexp)
-                <|> try (do whiteSpace lis
-                            optional $ try (reserved lis "string")
-                            str <- identifier lis
-                            whiteSpace lis
-                            modifyState (updatePState str PCadena)
-                            whiteSpace lis
-                            reservedOp lis "="
-                            whiteSpace lis
-                            DefS str <$> strexp)
+                       Def2 result str <$> intexp)
 
 forCondParser :: Parser' Condicion
-forCondParser = try (do Cond <$> boolexp)
+forCondParser = try (do whiteSpace lis
+                        Cond <$> boolexp)
 
 forIncParser :: Parser' Definicion
-forIncParser = try (do str <- identifier lis
+forIncParser = try (do whiteSpace lis
+                       str <- identifier lis
                        reservedOp lis "="
-                       Def2 str <$> intexp)
+                       Def2 False str <$> intexp)
 
 totParser :: Parser' a -> Parser' a
 totParser p = do whiteSpace lis

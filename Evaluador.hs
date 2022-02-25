@@ -20,6 +20,8 @@ import Control.Monad.Trans.Error (runErrorT)
 import Control.Error ( throwE, runExceptT )
 import Control.Monad.Trans.State.Lazy (gets)
 import Text.Read (readMaybe)
+import Control.Monad.Trans.Except (catchE)
+import GHC.IO (catchAny)
 
 type Eval a = ExceptT String (StateT Env IO) a
 
@@ -54,11 +56,10 @@ updateState var tipo ((x,x2):xs) = if var == x
                                     else (x,x2): updateState var tipo xs
                                     -- aca puede ser que no coincidan los tipos, hay que poner un either
 
-lookState :: String -> Env -> DataType'
-lookState _ []            = error "Variable no definida"
-                            --  cambiar por either
+lookState :: String -> Env -> Either String DataType'
+lookState var []            = Left ("Variable no definida: " ++ var)
 lookState var ((s,s1):st) = if s == var
-                                then s1
+                                then Right s1
                                 else lookState var st
 
 ---------------------------------------------------------------
@@ -84,15 +85,17 @@ evalComm (If b tc fc)    = do bval <- evalBoolExp b
 evalComm (For b c)       = do (var, value) <- evalForDef $ (\(Forc d _ _) -> d) b
                               counter <- lift $ gets (lookState "COUNTER")
                               case counter of
-                                  Entero valor -> do
-                                      when (valor == 0) $ modify (updateState var (Entero value))
-                                      condicion <- evalForCondition $ (\(Forc _ c _) -> c) b
-                                      (var', value') <- evalForInc $ (\(Forc _ _ i) -> i) b
-                                      when condicion $ do
-                                          modify (updateState var' (Entero value'))
-                                          modify (updateState "COUNTER" (Entero (valor+1)))
-                                          evalComm (Seq c (For b c))
-                                  Cadena str -> throwE "Error inesperado"
+                                Left e     -> throwE e
+                                Right fine -> case fine of
+                                                Entero valor -> do
+                                                    when (valor == 0) $ modify (updateState var (Entero value))
+                                                    condicion <- evalForCondition $ (\(Forc _ c _) -> c) b
+                                                    (var', value') <- evalForInc $ (\(Forc _ _ i) -> i) b
+                                                    when condicion $ do
+                                                        modify (updateState var' (Entero value'))
+                                                        modify (updateState "COUNTER" (Entero (valor+1)))
+                                                        evalComm (Seq c (For b c))
+                                                Cadena str -> throwE "Error inesperado"
 evalComm (WriteFile path tw append) = do ruta <- evalStrExp path
                                          twrite <- evalStrExp tw
                                          b <- evalBoolExp append
@@ -108,15 +111,21 @@ evalForCond (Forc d c i) = do t <- evalForDef d
 
 -- Aca devolvemos el nombre de la variable para poder pasarsela al evaluador de incremento
 evalForDef :: Definicion -> Eval VariableF
-evalForDef (Def2 var exp) = do valor <- evalIntExp exp
-                               return (var, valor)
+evalForDef (Def2 pdef var exp) = do d <- lift $ gets (lookState var)
+                                    valor <- evalIntExp exp
+                                    case d of
+                                        Left e     -> if pdef
+                                                        then do modify (updateState var (Entero valor))
+                                                                return (var, valor)
+                                                        else throwE e
+                                        Right fine -> return (var, valor)
 
 evalForCondition :: Condicion -> Eval Bool
 evalForCondition (Cond exp) = do evalBoolExp exp
 
 evalForInc :: Definicion -> Eval VariableF
-evalForInc (Def2 var exp) = do valor <- evalIntExp exp
-                               return (var, valor)
+evalForInc (Def2 pdef var exp) = do valor <- evalIntExp exp
+                                    return (var, valor)
 
 evalStrExp :: StringExp -> Eval String
 evalStrExp (Str s)          = return s
@@ -125,15 +134,18 @@ evalStrExp (Concat l r)     = do sl <- evalStrExp l
                                  return (sl ++ sr)
 evalStrExp (VariableStr sv) = do r <- lift $ gets (lookState sv)
                                  case r of
-                                     Cadena str -> return str
-                                     Entero i   -> do modify (updateState "ERR" (Cadena "No coinciden los tipos"))
-                                                      throwE "No coinciden los tipos"
+                                     Left e     -> throwE e
+                                     Right fine -> case fine of
+                                                    Cadena str -> return str
+                                                    Entero i   -> do
+                                                        modify (updateState "ERR" (Cadena "No coinciden los tipos"))
+                                                        throwE $ "No coincide el tipo de \"" ++ sv ++ ": " ++ show (Entero i) ++ "\" con string."
 evalStrExp (StrCast n)      = do res <- evalIntExp n
                                  return (show res)
 evalStrExp (Input str)      = do prompt <- evalStrExp str
                                  lift.lift $ putStr prompt
                                  lift.lift $ getLine
-evalStrExp (ReadFile path)  = do ruta <- evalStrExp path 
+evalStrExp (ReadFile path)  = do ruta <- evalStrExp path
                                  lift.lift $ readFile ruta
 
 evalIntExp :: Iexp -> Eval Integer
@@ -162,9 +174,12 @@ evalIntExp (IntCast str) = do s <- evalStrExp str
                                     Nothing  -> throwE ("Error al castear la string \"" ++ s ++ "\"")
 evalIntExp (Variable v)  = do r <- lift $ gets (lookState v)
                               case r of
-                                 Entero e  -> return e
-                                 Cadena str -> do modify (updateState "ERR" (Cadena "No coinciden los tipos"))
-                                                  throwE "No coinciden los tipos"
+                                  Left e     -> throwE e
+                                  Right fine -> case fine of
+                                                    Entero e  -> return e
+                                                    Cadena str -> do
+                                                        modify (updateState "ERR" (Cadena "No coinciden los tipos"))
+                                                        throwE "No coinciden los tipos"
 
 evalBoolExp :: Bexp -> Eval Bool
 evalBoolExp Btrue           = return True

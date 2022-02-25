@@ -16,6 +16,8 @@ import Control.Monad.Trans.State (runStateT)
 import Data.Char (toLower)
 ---------------------------------------------------------
 
+-- Hay que cambiar la implementacion del parser porque el chequeo de estado dificulta la evaluacion posterior
+
 type ParseState = [(String, Types)]
 
 initParserState :: ParseState
@@ -31,7 +33,7 @@ main = do arg:test:_ <- getArgs
 -- Ejecuta un programa a partir de su archivo fuente
 run :: [Char] -> Bool -> IO ()
 run ifile test = do s <- readFile ifile
-                    case runParser cmdparse [] ifile s of
+                    case runParser cmdparse initParser ifile s of
                         Left error -> print error
                         Right t -> do if test then do a <- runStateT (runExceptT (eval t)) []
                                                       case fst a of
