@@ -1,8 +1,4 @@
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -Wno-missing-methods #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
+
 module Evaluador where
 import Control.Applicative (pure, (<*>))
 import Control.Monad (liftM, ap, when)
@@ -17,10 +13,9 @@ import Control.Monad.State.Lazy
 import Data.Data (Data)
 import Control.Monad.Error ( throwError, catchError )
 import Control.Monad.Trans.Error (runErrorT)
-import Control.Error ( throwE, runExceptT )
+import Control.Monad.Trans.Except ( throwE, runExceptT, catchE )
 import Control.Monad.Trans.State.Lazy (gets)
 import Text.Read (readMaybe)
-import Control.Monad.Trans.Except (catchE)
 import GHC.IO (catchAny)
 
 type Eval a = ExceptT String (StateT Env IO) a

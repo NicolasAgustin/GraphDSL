@@ -10,8 +10,7 @@ import Data.Set
 import Text.Parsec ( runParsecT, modifyState, putState, runParser )
 import Text.Parsec.Prim (runParserT)
 import Control.Monad.Identity (runIdentity)
-import Control.Error (runExceptT)
-import Conduit (MonadIO(liftIO))
+import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.State (runStateT)
 import Data.Char (toLower)
 ---------------------------------------------------------
