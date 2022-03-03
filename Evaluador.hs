@@ -17,6 +17,7 @@ import Control.Monad.Trans.Except ( throwE, runExceptT, catchE )
 import Control.Monad.Trans.State.Lazy (gets)
 import Text.Read (readMaybe)
 import GHC.IO (catchAny)
+import System.IO
 
 type Eval a = ExceptT String (StateT Env IO) a
 
@@ -70,6 +71,7 @@ evalComm (Let v e)       = do val <- evalIntExp e
                               modify (updateState v (Entero val))
 evalComm (Print str)     = do s <- evalStrExp str
                               lift.lift $ putStrLn s
+                              lift.lift $ hFlush stdout
 evalComm (LetStr v stre) = do str <- evalStrExp stre
                               modify (updateState v (Cadena str))
 evalComm (Seq l r)       = do evalComm l
@@ -139,6 +141,7 @@ evalStrExp (StrCast n)      = do res <- evalIntExp n
                                  return (show res)
 evalStrExp (Input str)      = do prompt <- evalStrExp str
                                  lift.lift $ putStr prompt
+                                 lift.lift $ hFlush stdout
                                  lift.lift $ getLine
 evalStrExp (ReadFile path)  = do ruta <- evalStrExp path
                                  lift.lift $ readFile ruta

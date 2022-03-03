@@ -216,7 +216,7 @@ cmdparser = try (do reserved lis "if"
                         r <- reservedOp lis "="
                         st <- getState
                         case lookforPState str st of
-                            Nothing -> return Pass
+                            Nothing -> fail $ "Variable \"" ++ str ++ "\" no definida"
                             Just c -> case c of
                                         PCadena -> LetStr str <$> strexp
                                         PEntero -> Let str <$> intexp)

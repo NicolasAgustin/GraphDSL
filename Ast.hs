@@ -44,7 +44,6 @@ data StringExp = Str String
 
 data Cmd = Let Var Iexp                 -- Definicion
            | LetStr Var StringExp       -- Definicion
-           | Assign Var GenExpType      -- Asignacion
            | If Bexp Cmd Cmd 
            | For Forcond Cmd 
            | Seq Cmd Cmd 
@@ -54,11 +53,7 @@ data Cmd = Let Var Iexp                 -- Definicion
            | Pass 
            deriving (Show, Eq)
 
-data Forcond = Def Var Iexp 
-               | Fcond Bexp 
-               | Fint Iexp 
-               | Seqf Forcond Forcond 
-               | Forc Definicion Condicion Definicion 
+data Forcond = Forc Definicion Condicion Definicion 
                deriving (Show, Eq)
 
 data Definicion = Def2 Bool Var Iexp deriving (Show, Eq)

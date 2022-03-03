@@ -12,6 +12,7 @@ import Text.Parsec.Prim (runParserT)
 import Control.Monad.Identity (runIdentity)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.State (runStateT)
+import Control.Exception (catch, IOException)
 import Data.Char (toLower)
 ---------------------------------------------------------
 
@@ -23,10 +24,11 @@ initParserState :: ParseState
 initParserState = []
 
 main :: IO ()
-main = do arg:test:_ <- getArgs
-          if Prelude.map toLower test == "true"
-              then run arg True
-              else run arg False
+main = catch (do arg:_ <- getArgs
+                 run arg True) handler
+                 where
+                   handler :: IOException -> IO ()
+                   handler ex = do putStrLn "Usage: lscomp [filepath (.ls)]"
 
 
 -- Ejecuta un programa a partir de su archivo fuente
