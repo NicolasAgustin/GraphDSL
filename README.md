@@ -7,7 +7,7 @@ El archivo fuente debe tener la extension `.ls`
 
 ## Ejecucion con GHCI
 Estando en el directorio raiz del proyecto ejecutamos el comando \
-`ghci main.hs` \
+`ghci Main.hs` \
 Dentro del prompt del interprete ejecutamos\
 `Main*> run "(path al archivo)"`
 # Compilacion GHC
