@@ -1,4 +1,4 @@
-cadena = 1 + "hola"
+string cadena = read("hola")
 
 
 
