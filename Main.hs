@@ -28,7 +28,8 @@ main = catch (do arg:_ <- getArgs
                  run arg True) handler
                  where
                    handler :: IOException -> IO ()
-                   handler ex = do putStrLn "Usage: lscomp [filepath (.ls)]"
+                   handler ex = do putStrLn (show ex)
+                                   putStrLn "Usage: lscomp [filepath (.ls)]"
 
 
 -- Ejecuta un programa a partir de su archivo fuente
