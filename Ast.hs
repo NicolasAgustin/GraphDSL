@@ -38,23 +38,17 @@ data StringExp = Str String
                  | ReadFile StringExp 
                  deriving (Show, Eq)
 
-{- Para poder solucionar el error de la asignacion, necesito un tipo que generalice StringExp y Iexp -}
--- Luego el valor de esta expresion se evaluara en tiempo de evaluacion y se va a determinar el tipo de la asignacion y el tipo de la variable a la que
---  se quiere asignar
-
 data Cmd = Let Var Iexp                 -- Definicion
            | LetStr Var StringExp       -- Definicion
            | If Bexp Cmd Cmd 
            | For Forcond Cmd 
            | Seq Cmd Cmd 
            | Print StringExp
-        --    path, to_write, append
            | WriteFile StringExp StringExp Bexp
            | Pass 
            deriving (Show, Eq)
 
-data Forcond = Forc Definicion Condicion Definicion 
-               deriving (Show, Eq)
+data Forcond = Forc Definicion Condicion Definicion deriving (Show, Eq)
 
 data Definicion = Def2 Bool Var Iexp deriving (Show, Eq)
 

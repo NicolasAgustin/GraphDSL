@@ -24,12 +24,14 @@ initParserState :: ParseState
 initParserState = []
 
 main :: IO ()
-main = catch (do arg:_ <- getArgs
+main = catch (do arg:_ <- getArgs 
                  run arg True) handler
                  where
                    handler :: IOException -> IO ()
-                   handler ex = do putStrLn (show ex)
-                                   putStrLn "Usage: lscomp [filepath (.ls)]"
+                   handler ex = do args <- getArgs 
+                                   if length args == 0 then putStrLn "Usage: lscomp [filepath (.ls)]"
+                                   else print ex
+                                  
 
 
 -- Ejecuta un programa a partir de su archivo fuente
