@@ -8,7 +8,7 @@ if [ -f ./debug/lscomp ]; then
     rm ./debug/lscomp
 fi
 
-ghc --make main.hs -o lscomp
+ghc --make Main.hs -o lscomp
 
 rm *.o *.hi
 
