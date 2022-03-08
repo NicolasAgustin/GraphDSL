@@ -16,8 +16,9 @@ lis :: TokenParser u
 lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                   , reservedNames = ["true","false","pass","if",
                                                      "then","else","end",
-                                                     "for", "or", "and", "not", "string", "int", "str",
-                                                     "print", "input", "write", "read"]
+                                                     "for", "or", "and", "not", "string", "int", "str", "to", "while",
+                                                     "print", "input", "write", "read", "node", "set", "above", "below",
+                                                     "right", "left", "of", "INIT", "END"]
                                   , reservedOpNames = [  "+"
                                                        , "-"
                                                        , "*"
@@ -35,12 +36,28 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                                        , "++"
                                                        , "!="
                                                        , "len"
+                                                       , "<-"
+                                                       , "->"
                                                        ]
                                    }
                                  )
 
 
 type Parser' = Parsec String [(String, Types)]
+
+nodexp :: Parser' Nodexp 
+nodexp = chainl1 (try nodexp2) (try (do whiteSpace lis; reserved lis "<-"; return LeftTo))
+
+nodexp2 :: Parser' Nodexp 
+nodexp2 = chainl1 (try nodexp3) (try (do whiteSpace lis; reserved lis "->"; return RightTo))
+
+nodexp3 :: Parser' Nodexp 
+nodexp3 = try (do whiteSpace lis
+                  var <- identifier lis
+                  return (NodeVar var))
+          <|> try (do whiteSpace lis
+                      str <- strexp
+                      return (ConstNode str))
 
 strexp :: Parser' StringExp
 strexp = chainl1 (try strexp2) (try (do whiteSpace lis; reserved lis "&";whiteSpace lis; return Concat))
@@ -184,6 +201,10 @@ cmdparser = try (do reserved lis "if"
                     option (If cond cmd Pass) (do reserved lis "else"
                                                   cmd2 <- braces lis cmdparse
                                                   return (If cond cmd cmd2)))
+            <|> try (do reserved lis "INIT"
+                        return Init)
+            <|> try (do reserved lis "END"
+                        return End)
             <|> try (do reserved lis "print"
                         whiteSpace lis
                         str <- parens lis strexp
@@ -195,11 +216,29 @@ cmdparser = try (do reserved lis "if"
                         return (WriteFile p tw append))
             <|> try (do l <- reserved lis "pass"
                         return Pass)
-            <|> try (do reserved lis "for"
-                        f <- between (whiteSpace lis) (whiteSpace lis) (parens lis forp)
+            <|> try (do whiteSpace lis
+                        reserved lis "for"
+                        (f, l) <- parens lis forp
                         cmd <- braces lis cmdparse
-                        whiteSpace lis
-                        return (For f cmd))
+                        return (For f l cmd))
+            <|> try (do whiteSpace lis
+                        reserved lis "while"
+                        cond <- between (whiteSpace lis) (whiteSpace lis) (parens lis boolexp)
+                        cmd <- braces lis cmdparse
+                        return (While cond cmd))
+            <|> try (do reserved lis "node"
+                        nd <- identifier lis
+                        reservedOp lis "="
+                        tag <- strexp
+                        dir <- optionMaybe (do p <- parseDirection
+                                               reserved lis "of" 
+                                               id <- strexp
+                                               return (p, id))
+                        return (LetNode nd dir tag))
+            <|> try (do whiteSpace lis
+                        reserved lis "set"
+                        nexp <- nodexp 
+                        return (Set nexp))
             <|> try (do tipo <- reserved lis "int"
                         str <- identifier lis
                         r <- reservedOp lis "="
@@ -221,6 +260,16 @@ cmdparser = try (do reserved lis "if"
                                         PCadena -> LetStr str <$> strexp
                                         PEntero -> Let str <$> intexp)
 
+parseDirection :: Parser' Position 
+parseDirection = try (do reserved lis "right"
+                         return PRight)
+                 <|> try (do reserved lis "left"
+                             return PLeft)
+                 <|> try (do reserved lis "below"
+                             return Below
+                 <|> try (do reserved lis "above"
+                             return Above))
+
 params :: Parser' (StringExp, StringExp, Bexp)
 params = do path <- strexp
             comma lis
@@ -237,13 +286,12 @@ lookforPState :: String -> [(String, Types)] -> Maybe Types
 lookforPState str []          = Nothing
 lookforPState str ((x, y):xs) = if str == x then Just y else lookforPState str xs
 
-forp :: Parser' Forcond
+forp :: Parser' (Iexp, Iexp)
 forp = do whiteSpace lis
-          def <- forDefParser
-          char ';'
-          cond <- forCondParser
-          char ';'
-          Forc def cond <$> forIncParser
+          from <- intexp
+          reserved lis "to"
+          limit <- intexp
+          return (from, limit)
 
 forDefParser :: Parser' Definicion
 forDefParser = try (do whiteSpace lis

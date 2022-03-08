@@ -18,6 +18,7 @@ import Control.Monad.Trans.State.Lazy (gets)
 import Text.Read (readMaybe)
 import GHC.IO (catchAny)
 import System.IO
+import Data.Char (toLower)
 
 type Eval a = ExceptT String (StateT Env IO) a
 
@@ -79,26 +80,71 @@ evalComm (Seq l r)       = do evalComm l
 evalComm (If b tc fc)    = do bval <- evalBoolExp b
                               if bval then evalComm tc
                               else evalComm fc
-evalComm (For b c)       = do (var, value) <- evalForDef $ (\(Forc d _ _) -> d) b
-                              counter <- lift $ gets (lookState "COUNTER")
-                              case counter of
-                                Left e     -> throwE e
-                                Right fine -> case fine of
-                                                Entero valor -> do
-                                                    when (valor == 0) $ modify (updateState var (Entero value))
-                                                    condicion <- evalForCondition $ (\(Forc _ c _) -> c) b
-                                                    (var', value') <- evalForInc $ (\(Forc _ _ i) -> i) b
-                                                    when condicion $ do
-                                                        modify (updateState var' (Entero value'))
-                                                        modify (updateState "COUNTER" (Entero (valor+1)))
-                                                        evalComm (Seq c (For b c))
-                                                Cadena str -> throwE "Error inesperado"
+evalComm (For f l c)       = do from <- evalIntExp f
+                                limit <- evalIntExp l
+                                when (from /= limit) $ do evalComm (Seq c (For (Const (from+1)) l c))
+evalComm (While cond cmd)  = do condicion <- evalBoolExp cond
+                                when condicion $ do evalComm (Seq cmd (While cond cmd))
+    -- (var, value) <- evalForDef $ (\(Forc d _ _) -> d) b
+    --                             counter <- lift $ gets (lookState "COUNTER")
+    --                           case counter of
+    --                             Left e     -> throwE e
+    --                             Right fine -> case fine of
+    --                                             Entero valor -> do
+    --                                                 when (valor == 0) $ modify (updateState var (Entero value))
+    --                                                 condicion <- evalForCondition $ (\(Forc _ c _) -> c) b
+    --                                                 (var', value') <- evalForInc $ (\(Forc _ _ i) -> i) b
+    --                                                 when condicion $ do
+    --                                                     modify (updateState var' (Entero value'))
+    --                                                     modify (updateState "COUNTER" (Entero (valor+1)))
+    --                                                     evalComm (Seq c (For b c))
+    --                                             Cadena str -> throwE "Error inesperado"
 evalComm (WriteFile path tw append) = do ruta <- evalStrExp path
                                          twrite <- evalStrExp tw
                                          b <- evalBoolExp append
                                          if b then lift.lift $ appendFile ruta twrite
                                          else lift.lift $ writeFile ruta twrite
                                          return ()
+evalComm (LetNode id dir tag) = do  ttag <- evalStrExp tag
+                                    sid <- makeString dir
+                                    lift.lift $ appendFile "./latex/grafos.tex" (write ttag sid) 
+                                            where 
+                                                write t sid = "\\node[main] (" ++ id ++ ") [" ++ sid ++ "] " ++ "{$" ++ t ++ "$};"
+evalComm (Set ndexp) = do tw <- evalNodexp ndexp
+                          lift.lift $ appendFile "./latex/grafos.tex" tw
+evalComm Init = do lift.lift $ appendFile "./latex/grafos.tex" tw
+                    where 
+                        tw = "\\documentclass{article}\\usepackage{tikz}\\begin{document}\\begin{tikzpicture}[node distance={15mm} ,main/.style = {draw, circle}]"
+evalComm End = do lift.lift $ appendFile "./latex/grafos.tex" tw
+                    where 
+                        tw = "\\end{tikzpicture}\\end{document}"
+
+makeString :: Maybe (Position, StringExp) -> Eval String 
+makeString dir = do case dir of 
+                        Nothing -> return ""
+                        Just (p, sid) -> do s <- evalStrExp sid 
+                                            return (map toLower (show p) ++ " of=" ++ s)
+
+evalNodexp :: Nodexp -> Eval String
+evalNodexp (LeftTo nl nr) = do node1 <- evalNodexp nl 
+                               node2 <- evalNodexp nr 
+                               return (makeString node1 node2) 
+                                where 
+                                    makeString n1 n2 = "\\draw[->] (" ++ n1 ++ ") -- (" ++ n2 ++ ");"
+evalNodexp (RightTo nl nr) = do return ""
+evalNodexp (NodeVar var) = do return var
+evalNodexp (ConstNode str) = do return ""
+evalNodexp (Node str str2 str3 i) = do return ""
+
+ 
+{-
+LeftTo Nodexp Nodexp 
+              | RightTo Nodexp Nodexp
+              | NodeVar Var
+              | ConstNode StringExp
+              | Node StringExp StringExp StringExp Iexp
+-}
+
 
 evalForCond :: Forcond -> Eval (VariableF, Bool, VariableF)
 evalForCond (Forc d c i) = do t <- evalForDef d

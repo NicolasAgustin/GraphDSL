@@ -1,0 +1,9 @@
+\documentclass{article}
+\usepackage{tikz}
+\begin{document}
+\begin{tikzpicture}[node distance={15mm} ,main/.style = {draw, circle}]
+    \node[main] (n1) {$x_1$};
+    \node[main] (n2) [below of=n1] {$x_2$};
+    \draw[->] (n1) to (n2);
+\end{tikzpicture}
+\end{document}

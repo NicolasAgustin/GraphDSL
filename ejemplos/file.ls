@@ -2,9 +2,9 @@ int veces = int(input("Cuantas veces queres tu nombre: "));
 
 string contenido = "";
 
-for (int i = 0;i<veces;i=i+1){
-    write("ejemplos/archivo.txt", "nico" & str(i) & "\r\n", true);
-    print("Se imprimio " & str(i))
+for (0 to veces){
+    #write("ejemplos/archivo.txt", "nico" & str(i) & "\r\n", true);
+    print("Se imprimio " & str(veces))
 };
 
 contenido = read("ejemplos/archivo.txt");

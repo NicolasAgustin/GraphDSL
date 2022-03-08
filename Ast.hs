@@ -15,6 +15,15 @@ data Iexp = Plus Iexp Iexp
             | IntCast StringExp
             deriving (Show, Eq)
 
+data Position = Above | Below | PRight | PLeft deriving (Show, Eq)
+
+data Nodexp = LeftTo Nodexp Nodexp 
+              | RightTo Nodexp Nodexp
+              | NodeVar Var
+              | ConstNode StringExp
+              | Node StringExp StringExp StringExp Iexp
+              deriving (Show, Eq)
+
 data Bexp = Btrue 
             | Bfalse 
             | Not Bexp
@@ -40,12 +49,17 @@ data StringExp = Str String
 
 data Cmd = Let Var Iexp                 -- Definicion
            | LetStr Var StringExp       -- Definicion
+           | LetNode Var (Maybe (Position, StringExp)) StringExp      -- id position(optional) tag
+           | Set Nodexp
            | If Bexp Cmd Cmd 
-           | For Forcond Cmd 
+           | For Iexp Iexp Cmd 
+           | While Bexp Cmd
            | Seq Cmd Cmd 
            | Print StringExp
            | WriteFile StringExp StringExp Bexp
            | Pass 
+           | Init 
+           | End
            deriving (Show, Eq)
 
 data Forcond = Forc Definicion Condicion Definicion deriving (Show, Eq)
