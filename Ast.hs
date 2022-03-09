@@ -4,6 +4,8 @@ type Var = String
 
 data GenExpType = ExpStr StringExp | ExpInt Iexp deriving (Show, Eq)
 
+-- data Node =  
+
 data Iexp = Plus Iexp Iexp 
             | Minus Iexp Iexp 
             | Div Iexp Iexp 
@@ -15,13 +17,19 @@ data Iexp = Plus Iexp Iexp
             | IntCast StringExp
             deriving (Show, Eq)
 
-data Position = Above | Below | PRight | PLeft deriving (Show, Eq)
+data Position = Above | Below | PRight | PLeft deriving (Eq)
+
+instance Show Position where
+    show PRight = "right"
+    show PLeft  = "left"
+    show Above  = "above"
+    show Below  = "below"  
 
 data Nodexp = LeftTo Nodexp Nodexp 
               | RightTo Nodexp Nodexp
+              | LeftRight Nodexp Nodexp
               | NodeVar Var
               | ConstNode StringExp
-              | Node StringExp StringExp StringExp Iexp
               deriving (Show, Eq)
 
 data Bexp = Btrue 
@@ -43,22 +51,19 @@ data StringExp = Str String
                  | VariableStr Var
                  | Concat StringExp StringExp 
                  | StrCast Iexp
-                 | Input StringExp
-                 | ReadFile StringExp 
                  deriving (Show, Eq)
 
 data Cmd = Let Var Iexp                 -- Definicion
            | LetStr Var StringExp       -- Definicion
-           | LetNode Var (Maybe (Position, StringExp)) StringExp      -- id position(optional) tag
+           | LetNode StringExp (Maybe ([Position], StringExp)) StringExp      -- id position(optional) tag
            | Set Nodexp
            | If Bexp Cmd Cmd 
            | For Iexp Iexp Cmd 
            | While Bexp Cmd
            | Seq Cmd Cmd 
            | Print StringExp
-           | WriteFile StringExp StringExp Bexp
            | Pass 
-           | Init 
+           | Graph StringExp Iexp
            | End
            deriving (Show, Eq)
 

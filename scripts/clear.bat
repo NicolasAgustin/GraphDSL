@@ -1,0 +1,2 @@
+del *.pdf
+del *.tex

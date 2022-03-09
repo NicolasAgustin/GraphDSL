@@ -4,6 +4,7 @@ import Control.Applicative (pure, (<*>))
 import Control.Monad (liftM, ap, when)
 import Control.Monad.Except (ExceptT)
 import Ast
+import Data.String (lines)
 import Parser
 import Control.Monad.Trans (MonadTrans)
 import Control.Monad.Trans.Class (lift)
@@ -18,7 +19,8 @@ import Control.Monad.Trans.State.Lazy (gets)
 import Text.Read (readMaybe)
 import GHC.IO (catchAny)
 import System.IO
-import Data.Char (toLower)
+import Data.Char (toLower, isSpace)
+import System.Process
 
 type Eval a = ExceptT String (StateT Env IO) a
 
@@ -31,7 +33,7 @@ type VariableF = (String, Integer)
 data DataType' = Entero Integer | Cadena String deriving (Show)
 
 {- TODO:
-    - Revisar si el control de errores funciona dentro del if y del for -}
+    - Agregar control para chequear cuando insertar bucles -}
 
 instance Eq DataType' where
     (==) (Entero _) (Entero _) = True
@@ -85,90 +87,83 @@ evalComm (For f l c)       = do from <- evalIntExp f
                                 when (from /= limit) $ do evalComm (Seq c (For (Const (from+1)) l c))
 evalComm (While cond cmd)  = do condicion <- evalBoolExp cond
                                 when condicion $ do evalComm (Seq cmd (While cond cmd))
-    -- (var, value) <- evalForDef $ (\(Forc d _ _) -> d) b
-    --                             counter <- lift $ gets (lookState "COUNTER")
-    --                           case counter of
-    --                             Left e     -> throwE e
-    --                             Right fine -> case fine of
-    --                                             Entero valor -> do
-    --                                                 when (valor == 0) $ modify (updateState var (Entero value))
-    --                                                 condicion <- evalForCondition $ (\(Forc _ c _) -> c) b
-    --                                                 (var', value') <- evalForInc $ (\(Forc _ _ i) -> i) b
-    --                                                 when condicion $ do
-    --                                                     modify (updateState var' (Entero value'))
-    --                                                     modify (updateState "COUNTER" (Entero (valor+1)))
-    --                                                     evalComm (Seq c (For b c))
-    --                                             Cadena str -> throwE "Error inesperado"
-evalComm (WriteFile path tw append) = do ruta <- evalStrExp path
-                                         twrite <- evalStrExp tw
-                                         b <- evalBoolExp append
-                                         if b then lift.lift $ appendFile ruta twrite
-                                         else lift.lift $ writeFile ruta twrite
-                                         return ()
-evalComm (LetNode id dir tag) = do  ttag <- evalStrExp tag
-                                    sid <- makeString dir
-                                    lift.lift $ appendFile "./latex/grafos.tex" (write ttag sid) 
-                                            where 
-                                                write t sid = "\\node[main] (" ++ id ++ ") [" ++ sid ++ "] " ++ "{$" ++ t ++ "$};"
-evalComm (Set ndexp) = do tw <- evalNodexp ndexp
-                          lift.lift $ appendFile "./latex/grafos.tex" tw
-evalComm Init = do lift.lift $ appendFile "./latex/grafos.tex" tw
-                    where 
-                        tw = "\\documentclass{article}\\usepackage{tikz}\\begin{document}\\begin{tikzpicture}[node distance={15mm} ,main/.style = {draw, circle}]"
-evalComm End = do lift.lift $ appendFile "./latex/grafos.tex" tw
-                    where 
-                        tw = "\\end{tikzpicture}\\end{document}"
+evalComm (LetNode id dir tag) = do name <- lift $ gets (lookState "NAME")
+                                   case name of
+                                            Left e  -> throwE e
+                                            Right (Entero _)  -> throwE "Error"
+                                            Right (Cadena nm) -> do
+                                            nodeName <- evalStrExp id
+                                            ttag <- evalStrExp tag
+                                            sid <- makeString dir
+                                            lift.lift $ append (nm ++ ".tex") (write nodeName ttag sid)
+                                                where
+                                                    write id t sid = "\\node[main] (" ++ id ++ ") [" ++ sid ++ "] " ++ "{$" ++ t ++ "$};\n"
+evalComm (Set ndexp) = do name <- lift $ gets (lookState "NAME")
+                          case name of
+                                Left e  -> throwE e
+                                Right (Entero _)  -> throwE "Error"
+                                Right (Cadena nm) -> do
+                                tw <- evalNodexp ndexp
+                                lift.lift $ append (nm ++ ".tex") tw
+evalComm (Graph name distancia) = do strName <- evalStrExp name
+                                     dist <- evalIntExp distancia
+                                     modify (updateState "NAME" (Cadena strName))
+                                     lift.lift $ writeFile (strName ++ ".tex") ""
+                                     lift.lift $ append (strName ++ ".tex") ("\\documentclass{article}\n\\usepackage{tikz}\n\\begin{document}\n \
+                                     \ \\begin{tikzpicture}[node distance={" ++ show dist ++ "mm} ,main/.style = {draw, circle}]\n")
+evalComm End = do name <- lift $ gets (lookState "NAME")
+                  case name of
+                      Left e  -> throwE e
+                      Right (Entero _)  -> throwE "Error"
+                      Right (Cadena nm) -> do
+                            lift.lift $ append (nm ++ ".tex") "\\end{tikzpicture}\n\\end{document}\n"
+                            lift.lift $ callCommand $ "pdflatex " ++ (nm ++ ".tex > nul 2>&1")
+                            lift.lift $ callCommand "del *.aux > nul 2>&1"
+                            lift.lift $ callCommand "del *.dvi > nul 2>&1"
+                            lift.lift $ callCommand "del *.log > nul 2>&1"
 
-makeString :: Maybe (Position, StringExp) -> Eval String 
-makeString dir = do case dir of 
+{- Dropea los caracteres hasta llegar a ',' -}
+splitOn     :: Char -> String -> [String]
+splitOn p s =  case dropWhile (p==) s of
+                      "" -> []
+                      s' -> w : splitOn p s''
+                            where (w, s'') = break (p==) s'
+
+append :: String -> String -> IO ()
+append path lines = do writeLines path (splitOn '\n' lines)
+
+writeLines :: FilePath -> [String] -> IO ()
+writeLines fp []   = return ()
+writeLines fp (line:lines) = do hd <- openFile fp AppendMode
+                                hPutStrLn hd line
+                                hClose hd
+                                writeLines fp lines
+
+makeString :: Maybe ([Position], StringExp) -> Eval String
+makeString dir = do case dir of
                         Nothing -> return ""
-                        Just (p, sid) -> do s <- evalStrExp sid 
-                                            return (map toLower (show p) ++ " of=" ++ s)
-
+                        Just (p, sid) -> do s <- evalStrExp sid
+                                            return (dropWhile isSpace posiciones ++ " of=" ++ s)
+                                                where
+                                                    posiciones = foldr (++) [] (map ((" "++).show) p)
 evalNodexp :: Nodexp -> Eval String
-evalNodexp (LeftTo nl nr) = do node1 <- evalNodexp nl 
-                               node2 <- evalNodexp nr 
-                               return (makeString node1 node2) 
-                                where 
-                                    makeString n1 n2 = "\\draw[->] (" ++ n1 ++ ") -- (" ++ n2 ++ ");"
-evalNodexp (RightTo nl nr) = do return ""
+evalNodexp (LeftTo nl nr) = do node1 <- evalNodexp nl
+                               node2 <- evalNodexp nr
+                               return (makeString node1 node2)
+                                    where
+                                        makeString n1 n2 = "\\draw[->] (" ++ n1 ++ ") -- (" ++ n2 ++ ");\n"
+evalNodexp (RightTo nl nr) = do node1 <- evalNodexp nl
+                                node2 <- evalNodexp nr
+                                return (makeString node1 node2)
+                                    where
+                                        makeString n1 n2 = "\\draw[->] (" ++ n2 ++ ") -- (" ++ n1 ++ ");\n"
+evalNodexp (LeftRight nl nr) = do node1 <- evalNodexp nl
+                                  node2 <- evalNodexp nr
+                                  return (makeString node1 node2)
+                                    where
+                                        makeString n1 n2 = "\\draw (" ++ n2 ++ ") -- (" ++ n1 ++ ");\n"
 evalNodexp (NodeVar var) = do return var
-evalNodexp (ConstNode str) = do return ""
-evalNodexp (Node str str2 str3 i) = do return ""
-
- 
-{-
-LeftTo Nodexp Nodexp 
-              | RightTo Nodexp Nodexp
-              | NodeVar Var
-              | ConstNode StringExp
-              | Node StringExp StringExp StringExp Iexp
--}
-
-
-evalForCond :: Forcond -> Eval (VariableF, Bool, VariableF)
-evalForCond (Forc d c i) = do t <- evalForDef d
-                              b <- evalForCondition c
-                              t2 <- evalForInc i
-                              return (t, b, t2)
-
--- Aca devolvemos el nombre de la variable para poder pasarsela al evaluador de incremento
-evalForDef :: Definicion -> Eval VariableF
-evalForDef (Def2 pdef var exp) = do d <- lift $ gets (lookState var)
-                                    valor <- evalIntExp exp
-                                    case d of
-                                        Left e     -> if pdef
-                                                        then do modify (updateState var (Entero valor))
-                                                                return (var, valor)
-                                                        else throwE e
-                                        Right fine -> return (var, valor)
-
-evalForCondition :: Condicion -> Eval Bool
-evalForCondition (Cond exp) = do evalBoolExp exp
-
-evalForInc :: Definicion -> Eval VariableF
-evalForInc (Def2 pdef var exp) = do valor <- evalIntExp exp
-                                    return (var, valor)
+evalNodexp (ConstNode str) = do evalStrExp str
 
 evalStrExp :: StringExp -> Eval String
 evalStrExp (Str s)          = return s
@@ -185,12 +180,6 @@ evalStrExp (VariableStr sv) = do r <- lift $ gets (lookState sv)
                                                         throwE $ "No coincide el tipo de \"" ++ sv ++ ": " ++ show (Entero i) ++ "\" con string."
 evalStrExp (StrCast n)      = do res <- evalIntExp n
                                  return (show res)
-evalStrExp (Input str)      = do prompt <- evalStrExp str
-                                 lift.lift $ putStr prompt
-                                 lift.lift $ hFlush stdout
-                                 lift.lift $ getLine
-evalStrExp (ReadFile path)  = do ruta <- evalStrExp path
-                                 lift.lift $ readFile ruta
 
 evalIntExp :: Iexp -> Eval Integer
 evalIntExp (Const n)    = return n
