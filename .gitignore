@@ -1,4 +1,4 @@
-.vscode\
-latex\
+.vscode/
+latex/
 *.pdf
 *.tex
