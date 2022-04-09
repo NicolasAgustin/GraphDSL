@@ -84,7 +84,7 @@ nodexp4 = try (do whiteSpace lis
 
 -- Primer orden sintactico
 strexp :: Parser' StringExp
-strexp = chainl1 (try strexp2) (try (do whiteSpace lis; reserved lis "&";whiteSpace lis; return Concat))
+strexp = chainl (try strexp2) (try (do whiteSpace lis; reserved lis "&";whiteSpace lis; return Concat)) Error
 
 -- Segundo orden sintactico 
 strexp2 :: Parser' StringExp
@@ -277,26 +277,34 @@ cmdparser = try (do reserved lis "if"
                         reserved lis "set"
                         nexp <- nodexp          -- Parseamos la expresion de nodo (ConstNode, LeftTo, RightTo, LeftRight, etc)
                         return (Set nexp))
-            <|> try (do tipo <- reserved lis "int"
-                        str <- identifier lis
-                        reservedOp lis "="
-                        def <- intexp
-                        modifyState (updatePState str PEntero)          -- Agregamos la variable con su tipo para saber a que 
-                        return (Let str def))                           --      parser llamar
-            <|> try (do tipo <- reserved lis "string"
-                        str <- identifier lis
-                        r <- reservedOp lis "="
-                        sdef <- strexp
-                        modifyState (updatePState str PCadena)          -- Idem 
-                        return (LetStr str sdef))
+        --     <|> try (do tipo <- reserved lis "int"
+        --                 str <- identifier lis
+        --                 reservedOp lis "="
+        --                 def <- intexp
+        --                 modifyState (updatePState str PEntero)          -- Agregamos la variable con su tipo para saber a que 
+        --                 return (Let str def))                           --      parser llamar
+        --     <|> try (do tipo <- reserved lis "string"
+        --                 str <- identifier lis
+        --                 r <- reservedOp lis "="
+        --                 sdef <- strexp
+        --                 modifyState (updatePState str PCadena)          -- Idem 
+        --                 return (LetStr str sdef))
             <|> try (do str <- identifier lis
                         reservedOp lis "="
-                        st <- getState          -- Obtenemos el estado de parsec
-                        case lookforPState str st of    -- Buscamos la variable en el estado
-                            Nothing -> fail $ "Variable \"" ++ str ++ "\" no definida"
-                            Just c -> case c of
-                                        PCadena -> LetStr str <$> strexp
-                                        PEntero -> Let str <$> intexp)
+                        f <- strexp
+                        case f of
+                                Error -> (do Let str <$> intexp) 
+                                _ -> return (LetStr str f))
+        --     <|> try (do reservedOp lis "="
+        --                 str <- identifier lis
+        --                 f <- intexp
+        --                 return (Let str f))
+                        -- st <- getState          -- Obtenemos el estado de parsec
+                        -- case lookforPState str st of    -- Buscamos la variable en el estado
+                        --     Nothing -> fail $ "Variable \"" ++ str ++ "\" no definida"
+                        --     Just c -> case c of
+                        --                 PCadena -> LetStr str <$> strexp
+                        --                 PEntero -> Let str <$> intexp)
 
 -- Parser para el comando insert
 parseInsert :: Parser' (StringExp, StringExp, Maybe ([Position], StringExp))

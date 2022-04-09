@@ -54,6 +54,7 @@ data StringExp = Str String                     -- String literal
                  | VariableStr Var              -- Variable
                  | Concat StringExp StringExp   -- Concatenacion de strings
                  | StrCast Iexp                 -- Casteo a entero
+                 | Error
                  deriving (Show, Eq)
 
 data Cmd = Let Var Iexp                                                     -- Definicion entera
