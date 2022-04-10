@@ -4,7 +4,6 @@ import Ast
 import Parser
 import Evaluador
 import Data.Data (Data, DataType)
-import Data.Set
 import Text.Parsec ( runParsecT, modifyState, putState, runParser )
 import Text.Parsec.Prim (runParserT)
 import Control.Monad.Identity (runIdentity)
@@ -19,10 +18,10 @@ main = catch (do arg:_ <- getArgs       -- Obtenemos los argumentos de linea de 
                  run arg True) handler
                  where
                    handler :: IOException -> IO ()    -- Handler para las excepciones de sistema
-                   handler ex = do args <- getArgs 
-                                   if length args == 0 then putStrLn "Usage: lscomp [filepath (.ls)]"
+                   handler ex = do args <- getArgs
+                                   if null args then putStrLn "Usage: lscomp [filepath (.ls)]"
                                    else print ex
-                                  
+
 -- Ejecuta un programa a partir de su archivo fuente
 {- El argumento test es meramente para testing
     test: True -> Parseo y Evaluacion
@@ -33,7 +32,7 @@ run ifile test = do s <- readFile ifile     -- Lectura del archivo con el codigo
                     case runParser cmdparse initParser ifile s of     -- Ejecutamos el parser
                         Left error -> print error
                         Right t -> do if test then do a <- runStateT (runExceptT (eval t)) []     -- Ejecutamos el evaluador
-                                                      case fst a of   
+                                                      case fst a of
                                                         Left e    -> putStrLn e
                                                         Right res -> return ()
                                       else print t
