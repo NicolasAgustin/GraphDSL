@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Evaluador where
 import Control.Applicative (pure, (<*>))
@@ -5,13 +6,13 @@ import Control.Monad (liftM, ap, when)
 import Control.Monad.Except (ExceptT)
 import Ast
 import Data.String (lines)
+import Data.Data
 import Parser
 import Control.Monad.Trans (MonadTrans)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.State (StateT)
 import Control.Monad.State.Lazy
     ( modify, StateT(runStateT), put, get )
-import Data.Data (Data)
 import Control.Monad.Error ( throwError, catchError )
 import Control.Monad.Trans.Error (runErrorT)
 import Control.Monad.Trans.Except ( throwE, runExceptT, catchE )
@@ -29,7 +30,7 @@ type Eval a = ExceptT String (StateT Env IO) a
 type Env = [(String, DataType')]
 
 -- Tipo de dato para especificar los distintos tipos
-data DataType' = Entero Integer | Cadena String deriving (Show)
+data DataType' = Entero Integer | Cadena String deriving (Show, Data)
 
 {- TODO:
     - Agregar control para chequear cuando insertar bucles 
@@ -38,7 +39,7 @@ data DataType' = Entero Integer | Cadena String deriving (Show)
 
 -- Instancia de comparacion para los tipos
 instance Eq DataType' where
-    (==) (Entero x) (Entero x2) = x == x2 
+    (==) (Entero x) (Entero x2) = x == x2
     (==) (Entero _) (Cadena _)  = False
     (==) (Cadena _) (Entero _)  = False
     (==) (Cadena s) (Cadena s2) = s == s2
@@ -88,7 +89,7 @@ evalComm (Log str)          = do s <- evalStrExp str                  -- Salida 
                                  flag <- assert (Entero 0) name
                                  modify (updateState "LOGGER" (Entero 1))
                                  if flag then do lift.lift $ writeFile "info.log" ""
-                                                 lift.lift $ append "info.log" (s ++ "\n") 
+                                                 lift.lift $ append "info.log" (s ++ "\n")
                                  else lift.lift $ append "info.log" (s ++ "\n")
 evalComm (LetStr v stre)      = do str <- evalStrExp stre               -- Definicion de strings
                                    modify (updateState v (Cadena str))
@@ -104,24 +105,22 @@ evalComm (For f l c)          = do from <- evalIntExp f     -- Limite inferior
 evalComm (While cond cmd)     = do condicion <- evalBoolExp cond
                                    when condicion $ do evalComm (Seq cmd (While cond cmd))
 evalComm (LetNode id dir tag) = do name <- lift $ gets (lookState "NAME")
+                                   (b, dato) <- typeChecker name (Cadena "")
+                                   when b $ do
+                                        name <- cadenaGet dato
+                                        nodeName <- evalStrExp id   -- Identificador del nodo
+                                        ttag <- evalStrExp tag      -- Tag que se va a visualizar en el grafico
+                                        sid <- makeStringDirections dir    -- Construye la string de direcciones a partir de una lista
+                                        lift.lift $ append (name ++ ".tex") (text nodeName ttag sid)  -- Inserta el texto en el archivo
+                                        where
+                                            text id t sid = "\\node[main] (" ++ id ++ ") [" ++ sid ++ "] " ++ "{$" ++ t ++ "$};\n"
                                    -- Obtenemos la variable NAME que se inserta al estado en el comando GRAPH
-                                   case name of
-                                        Left e  -> throwE e
-                                        Right (Entero _)  -> throwE "Error"
-                                        Right (Cadena nm) -> do
-                                            nodeName <- evalStrExp id   -- Identificador del nodo
-                                            ttag <- evalStrExp tag      -- Tag que se va a visualizar en el grafico
-                                            sid <- makeStringDirections dir    -- Construye la string de direcciones a partir de una lista
-                                            lift.lift $ append (nm ++ ".tex") (text nodeName ttag sid)  -- Inserta el texto en el archivo
-                                            where
-                                                text id t sid = "\\node[main] (" ++ id ++ ") [" ++ sid ++ "] " ++ "{$" ++ t ++ "$};\n"
 evalComm (Set ndexp) = do name <- lift $ gets (lookState "NAME")
-                          case name of
-                                Left e  -> throwE e
-                                Right (Entero _)  -> throwE "Error"
-                                Right (Cadena nm) -> do
-                                tw <- evalNodexp ndexp
-                                lift.lift $ append (nm ++ ".tex") tw
+                          (b, dato) <- typeChecker name (Cadena "")
+                          when b $ do
+                              name <- cadenaGet dato
+                              tw <- evalNodexp ndexp
+                              lift.lift $ append (name ++ ".tex") tw
 evalComm (Graph name distancia) = do strName <- evalStrExp name     -- Nombre del grafico
                                      dist <- evalIntExp distancia   -- Distancia entre nodos
                                      modify (updateState "NAME" (Cadena strName))
@@ -131,20 +130,28 @@ evalComm (Graph name distancia) = do strName <- evalStrExp name     -- Nombre de
                                      lift.lift $ append (strName ++ ".tex") ("\\documentclass{article}\n\\usepackage{tikz}\n\\begin{document}\n \
                                      \ \\begin{tikzpicture}[node distance={" ++ show dist ++ "mm} ,main/.style = {draw, circle}]\n")
 evalComm End = do name <- lift $ gets (lookState "NAME")
-                  case name of
-                      Left e  -> throwE e
-                      Right (Entero _)  -> throwE "Error"
-                      Right (Cadena nm) -> do
-                            lift.lift $ append (nm ++ ".tex") "\\end{tikzpicture}\n\\end{document}\n"
-                            {- Llamamos al compilador de latex con el nombre del archivo .tex creado y redireccionando la salida
-                             a nul -}
-                            lift.lift $ callCommand $ "pdflatex " ++ (nm ++ ".tex > nul 2>&1")
-                            -- Eliminamos los archivos .aux 
-                            lift.lift $ callCommand "del *.aux > nul 2>&1"
-                            -- Eliminamos los archivos .dvi
-                            lift.lift $ callCommand "del *.dvi > nul 2>&1"
-                            -- Eliminamos los archivos .log
-                            lift.lift $ callCommand "del *.log > nul 2>&1"
+                  (b, dato) <- typeChecker name (Cadena "")
+                  when b $ do name <- cadenaGet dato
+                              lift.lift $ append (name ++ ".tex") "\\end{tikzpicture}\n\\end{document}\n"
+                              {- Llamamos al compilador de latex con el nombre del archivo .tex creado y redireccionando la salida
+                                a nul -}
+                              lift.lift $ callCommand $ "pdflatex " ++ (name ++ ".tex > nul 2>&1")
+                              -- Eliminamos los archivos .aux 
+                              lift.lift $ callCommand "del *.aux > nul 2>&1"
+                              -- Eliminamos los archivos .dvi
+                              lift.lift $ callCommand "del *.dvi > nul 2>&1"
+                              -- Eliminamos los archivos .log
+                              lift.lift $ callCommand "del *.log > nul 2>&1"
+
+cadenaGet :: DataType' -> Eval String
+cadenaGet (Cadena s) = return s
+
+enteroGet :: DataType' -> Eval Integer 
+enteroGet (Entero i) = return i
+
+typeChecker :: Either String DataType' -> DataType' -> Eval (Bool, DataType')
+typeChecker (Left s) _ = throwE s
+typeChecker (Right d) s = return (toConstr d == toConstr s, d)
 
 -- Funcion auxiliar para splitear una cadena de caracteres en un caracter dado
 {- Dropea los caracteres hasta llegar a ',' -}
@@ -213,18 +220,17 @@ evalNodexp (ConstNode str) = do evalStrExp str
 
 -- Evaluacion de expresiones string
 evalStrExp :: StringExp -> Eval String
+evalStrExp Error = throwE "Error evaluando expresion string"
 evalStrExp (Str s)          = return s
 evalStrExp (Concat l r)     = do sl <- evalStrExp l
                                  sr <- evalStrExp r
                                  return (sl ++ sr)
 evalStrExp (VariableStr sv) = do r <- lift $ gets (lookState sv)
-                                 case r of
-                                     Left e     -> throwE e
-                                     Right fine -> case fine of
-                                                    Cadena str -> return str
-                                                    Entero i   -> do
-                                                        modify (updateState "ERR" (Cadena "No coinciden los tipos"))
-                                                        throwE $ "No coincide el tipo de \"" ++ sv ++ ": " ++ show (Entero i) ++ "\" con string."
+                                 (b, dato) <- typeChecker r (Cadena "")
+                                 if b then do cadenaGet dato
+                                 else do i <- enteroGet dato
+                                         modify (updateState "ERR" (Cadena "No coinciden los tipos"))
+                                         throwE $ "No coincide el tipo de \"" ++ sv ++ ": " ++ show (Entero i) ++ "\" con string."
 evalStrExp (StrCast n)      = do res <- evalIntExp n
                                  return (show res)
 
@@ -254,13 +260,10 @@ evalIntExp (IntCast str) = do s <- evalStrExp str
                                     Just num -> return num
                                     Nothing  -> throwE ("Error al castear la string \"" ++ s ++ "\"")
 evalIntExp (Variable v)  = do r <- lift $ gets (lookState v)
-                              case r of
-                                  Left e     -> throwE e
-                                  Right fine -> case fine of
-                                                    Entero e  -> return e
-                                                    Cadena str -> do
-                                                        modify (updateState "ERR" (Cadena "No coinciden los tipos"))
-                                                        throwE "No coinciden los tipos"
+                              (b, dato) <- typeChecker r (Entero 0)
+                              if b then do enteroGet dato 
+                              else do modify (updateState "ERR" (Cadena "No coinciden los tipos"))
+                                      throwE "No coinciden los tipos"
 
 -- Evaluacion de expresiones booleanas
 evalBoolExp :: Bexp -> Eval Bool
