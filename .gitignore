@@ -2,3 +2,4 @@
 latex/
 *.pdf
 *.tex
+*.log

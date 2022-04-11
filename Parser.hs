@@ -18,7 +18,7 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                   , reservedNames = ["true","false","pass","if",
                                                      "then","else","end",
                                                      "for", "or", "and", "not", "string", "int", "str", "to", "while",
-                                                     "print", "input", "write", "read", "insert", "set", "above", "below",
+                                                     "print", "input", "write", "read", "insert", "edge", "above", "below",
                                                      "right", "left", "of", "GRAPH", "END"]
                                   , reservedOpNames = [  "+"
                                                        , "-"
@@ -252,11 +252,10 @@ cmdparser = try (do reserved lis "if"
                         return (Graph name distancia))
             <|> try (do reserved lis "END"              -- Cierre de definicion
                         return End)
-            <|> try (do reserved lis "print"
+            <|> try (do reserved lis "log"
                         whiteSpace lis
                         str <- parens lis strexp
-                        whiteSpace lis
-                        return (Print str))
+                        return (Log str))
             <|> try (do l <- reserved lis "pass"
                         return Pass)
             <|> try (do whiteSpace lis
@@ -274,7 +273,7 @@ cmdparser = try (do reserved lis "if"
                         (nd, tag, dir) <- parens lis parseInsert        -- Parseamos nodo id, posiciones, tag
                         return (LetNode nd dir tag))
             <|> try (do whiteSpace lis
-                        reserved lis "set"
+                        reserved lis "edge"
                         nexp <- nodexp          -- Parseamos la expresion de nodo (ConstNode, LeftTo, RightTo, LeftRight, etc)
                         return (Set nexp))
             <|> try (do tipo <- reserved lis "int"

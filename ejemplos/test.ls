@@ -4,4 +4,5 @@ int n = 0;
 
 n = i + a;
 
-print(str(n))
+log("Esto es un log");
+log("segundo log")

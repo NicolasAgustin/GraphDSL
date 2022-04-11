@@ -6,7 +6,11 @@ while (i < 5) {
         insert ("n" & str(i), "x_" & str(i))
     } else {
         anterior = i - 1;
-        insert ("n" & str(i), "x_" & str(i),below left of "n" & str(anterior));
+        insert (
+            "n" & str(i),
+            "x_" & str(i),
+            below left of "n" & str(anterior)
+        );
         set ("n" & str(anterior)) -> ("n" & str(i))
     };
     
