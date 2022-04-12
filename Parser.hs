@@ -57,16 +57,16 @@ type Parser' = Parsec String [(String, Types)]
 -- Primer orden sintactico
 nodexp :: Parser' Nodexp
 nodexp = chainl1 (try (do parens lis nodexp2)
-                  <|> try nodexp2) (try (do whiteSpace lis; reserved lis "->"; return LeftTo))
+                  <|> try nodexp2) (try (do whiteSpace lis; reserved lis "<-"; return RightTo))
 
 -- Segundo orden sintactico
 nodexp2 :: Parser' Nodexp
-nodexp2 = chainl1 (try (do parens lis nodexp3) 
-                   <|> nodexp3) (try (do whiteSpace lis; reserved lis "<-"; return RightTo))
+nodexp2 = chainl1 (try (do braces lis nodexp3) 
+                   <|> nodexp3) (try (do whiteSpace lis; reserved lis "->"; return LeftTo))
 
 -- Tercer orden sintactico
 nodexp3 :: Parser' Nodexp
-nodexp3 = chainl1 (try (do parens lis nodexp4)
+nodexp3 = chainl1 (try (do braces lis nodexp4)
                    <|> nodexp4) (try (do whiteSpace lis; reserved lis "<->"; return LeftRight))
 
 -- Cuarto orden sintactico
@@ -270,7 +270,7 @@ cmdparser = try (do reserved lis "if"
                         return (While cond cmd))
             <|> try (do whiteSpace lis
                         reserved lis "insert"
-                        (nd, tag, dir) <- parens lis parseInsert        -- Parseamos nodo id, posiciones, tag
+                        (nd, tag, dir) <- braces lis parseInsert        -- Parseamos nodo id, posiciones, tag
                         return (LetNode nd dir tag))
             <|> try (do whiteSpace lis
                         reserved lis "edge"
@@ -298,7 +298,7 @@ cmdparser = try (do reserved lis "if"
                                         PEntero -> Let str <$> intexp)
 
 -- Parser para el comando insert
-parseInsert :: Parser' (StringExp, StringExp, Maybe ([Position], StringExp))
+parseInsert :: Parser' (StringExp , StringExp, Maybe ([Position], Nodexp))
 parseInsert = do whiteSpace lis
                  nd <- parseStrParens           -- Intenta parsear con o sin parentesis
                  char ','
@@ -308,12 +308,16 @@ parseInsert = do whiteSpace lis
                             char ','
                             p <- many parseDirection    -- Parseamos las diferentes direcciones (above, below, right, left)
                             reserved lis "of"
-                            id <- parseStrParens
+                            id <- parseNodeVarParens
                             return (p, id))
                  return (nd, tag, dir)
 
+parseNodeVarParens :: Parser' Nodexp
+parseNodeVarParens = try (do parens lis nodexp)
+                     <|> try nodexp 
+
 -- Parser para intentar parsear lo mismo con parentesis y sin
-parseStrParens :: Parser' StringExp 
+parseStrParens :: Parser' StringExp  
 parseStrParens = try (do parens lis strexp)
                  <|> try strexp
 

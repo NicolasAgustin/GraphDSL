@@ -24,6 +24,13 @@ import System.IO
 import Data.Char (toLower, isSpace)
 import System.Process
 
+{-
+    TODO:
+    - Ver si se puede cambiar la distancia entre nodos de forma dinamica (podria ser una primitiva)
+    - Ver como se puede cambiar el color de una arista, nodo o tag (primitiva)
+    - Ver como agregar tag a una arista (agregar a la primitiva de edge)
+-}
+
 -- Tipo de dato para agrupar las monadas (transformadores)
 type Eval a = ExceptT String (StateT Env IO) a
 
@@ -35,12 +42,18 @@ data DataType' = Entero Integer
                 | Cadena String
                 | Node String String String
                 | Output [String]
-                deriving (Show, Data)
+                deriving (Data)
 
 {- TODO:
     - Agregar control para chequear cuando insertar bucles 
     - Agregar estado para los nodos, cuando se inserta uno se debe agregar al estado
     luego cuando se setea la arista, se debe chequear por estos nodos, si no existen debe arrojar una excepcion-}
+
+instance Show DataType' where
+    show (Entero x)   = "Entero " ++ show x
+    show (Cadena s)   = "Cadena " ++ show s
+    show (Node i d t) = "Nodo " ++ show i ++ " " ++ show d ++ " " ++ show t
+    show (Output l)   = "Output " ++ concat l
 
 -- Instancia de comparacion para los tipos
 instance Eq DataType' where
@@ -58,9 +71,9 @@ instance Eq DataType' where
 -- Inicializacion del estado
 initState :: Env
 initState = [
-    ("COUNTER", Entero 0), 
-    ("ERR", Cadena ""), 
-    ("LOGGER", Entero 0), 
+    ("COUNTER", Entero 0),
+    ("ERR", Cadena ""),
+    ("LOGGER", Entero 0),
     ("OUTPUT", Output [])
     ]
 
@@ -117,7 +130,7 @@ evalComm (Log str)                  = do s <- evalStrExp str                  --
                                          name <- lift $ gets (lookState "LOGGER")
                                          flag <- assert (Entero 0) name
                                          updateValueFromState "LOGGER" (Entero 1)
-                                         if flag then 
+                                         if flag then
                                              do lift.lift $ writeFile "info.log" ""
                                                 lift.lift $ append "info.log" (s ++ "\n")
                                          else lift.lift $ append "info.log" (s ++ "\n")
@@ -134,13 +147,13 @@ evalComm (For f l c)                = do from <- evalIntExp f     -- Limite infe
                                          when (from /= limit) $ do evalComm (Seq c (For (Const (from+1)) l c))
 evalComm (While cond cmd)           = do condicion <- evalBoolExp cond
                                          when condicion $ do evalComm (Seq cmd (While cond cmd))
-evalComm (LetNode id dir tag)       = do 
+evalComm (LetNode id dir tag)       = do
     nodeName <- evalStrExp id   -- Identificador del nodo
     ttag <- evalStrExp tag      -- Tag que se va a visualizar en el grafico
     sid <- makeStringDirections dir
     updateValueFromState nodeName (Node nodeName sid ttag)
     writeOutput $ "\\node[main] (" ++ nodeName ++ ") [" ++ sid ++ "] " ++ "{$" ++ ttag ++ "$};\n"
-evalComm (Set ndexp)                = do 
+evalComm (Set ndexp)                = do
     tw <- evalNodexp ndexp
     writeOutput tw
 evalComm (Graph name distancia cmd) = do
@@ -183,7 +196,8 @@ nodeGet (Node i d t) = return (i, d, t)
 
 typeChecker :: Either String DataType' -> DataType' -> Eval (Bool, DataType')
 typeChecker (Left s) _ = throwE s
-typeChecker (Right d) s = return (toConstr d == toConstr s, d)
+typeChecker (Right d) s = if toConstr d == toConstr s then return (True, d)
+                          else throwE $ "No coinciden los tipos. Se recibio " ++ show (toConstr d) ++ " pero se esperaba " ++ show (toConstr s) ++ "."
 
 -- Funcion auxiliar para splitear una cadena de caracteres en un caracter dado
 {- Dropea los caracteres hasta llegar a ',' -}
@@ -215,11 +229,11 @@ append path lines = do writeLines path (splitOn '\n' lines)
     Ejemplo: 
         ([Above, Right], "n1") -> "above right of=n1"
 -}
-makeStringDirections :: Maybe ([Position], StringExp) -> Eval String
+makeStringDirections :: Maybe ([Position], Nodexp) -> Eval String
 makeStringDirections dir = do case dir of
                                 Nothing -> return ""
                                 Just (p, sid) -> do
-                                    s <- evalStrExp sid
+                                    s <- evalNodexp sid
                                     nodo <- getValueFromState s
                                     (b, nodo_d) <- typeChecker nodo (Node "" "" "")
                                     -- Dropeamos todos los espacios de la izquierda
@@ -246,14 +260,25 @@ evalNodexp (RightTo nl nr) = do node1 <- evalNodexp nl
                                 node2 <- evalNodexp nr
                                 return (makeString node1 node2)
                                     where
-                                        makeString n1 n2 = "\\draw[->] (" ++ n2 ++ ") -- (" ++ n1 ++ ");\n"
+                                        makeString n1 n2 = "\\draw[<-] (" ++ n2 ++ ") -- (" ++ n1 ++ ");\n"
 evalNodexp (LeftRight nl nr) = do node1 <- evalNodexp nl
                                   node2 <- evalNodexp nr
                                   return (makeString node1 node2)
                                     where
                                         makeString n1 n2 = "\\draw (" ++ n2 ++ ") -- (" ++ n1 ++ ");\n"
-evalNodexp (NodeVar var) = do return var
-evalNodexp (ConstNode str) = do evalStrExp str
+evalNodexp (NodeVar var) = do nodeVar <- getValueFromState var
+                              (_, str) <- typeChecker nodeVar (Node "" "" "")
+                              (i, d, t) <- nodeGet str
+                              return i
+evalNodexp (ConstNode str) = do rresult <- evalStrExp str
+                                strContent <- getValueFromState rresult
+                                (_, str) <- typeChecker strContent (Cadena "")
+                                str_content <- cadenaGet str
+                                nodeVar <- getValueFromState str_content
+                                (b, ndata) <- typeChecker nodeVar (Node "" "" "")
+                                (i, d, t) <- nodeGet ndata
+                                return i
+
 
 -- Evaluacion de expresiones string
 evalStrExp :: StringExp -> Eval String
@@ -265,9 +290,8 @@ evalStrExp (Concat l r)     = do sl <- evalStrExp l
 evalStrExp (VariableStr sv) = do r <- getValueFromState sv
                                  (b, dato) <- typeChecker r (Cadena "")
                                  if b then do cadenaGet dato
-                                 else do i <- enteroGet dato
-                                         updateValueFromState "ERR" (Cadena "No coinciden los tipos") 
-                                         throwE $ "No coincide el tipo de \"" ++ sv ++ ": " ++ show (Entero i) ++ "\" con string."
+                                 else do updateValueFromState "ERR" (Cadena "No coinciden los tipos")
+                                         throwE $ "No coincide el tipo de \"" ++ sv ++ "\" esperado string."
 evalStrExp (StrCast n)      = do res <- evalIntExp n
                                  return (show res)
 
@@ -282,7 +306,7 @@ evalIntExp (Minus l r)  = do e1 <- evalIntExp l
                              return (e1 - e2)
 evalIntExp (Div l r)    = do e1 <- evalIntExp l
                              e2 <- evalIntExp r
-                             if e2 == 0 then 
+                             if e2 == 0 then
                                  do updateValueFromState "ERR" (Cadena "No se puede dividir por cero")
                                     throwE "No se puede dividir por cero"
                              else return (e1 `div` e2)
@@ -302,6 +326,9 @@ evalIntExp (Variable v)  = do r <- getValueFromState v
                               if b then do enteroGet dato
                               else do updateValueFromState "ERR" (Cadena "No coinciden los tipos")
                                       throwE "No coinciden los tipos"
+
+mprint :: String -> Eval ()
+mprint s = lift.lift $ putStrLn s
 
 -- Evaluacion de expresiones booleanas
 evalBoolExp :: Bexp -> Eval Bool

@@ -59,7 +59,7 @@ data StringExp = Str String                     -- String literal
 
 data Cmd = Let Var Iexp                                                     -- Definicion entera
            | LetStr Var StringExp                                           -- Definicion string
-           | LetNode StringExp (Maybe ([Position], StringExp)) StringExp    -- Definicion de nodo LetNode(id, posiciones, tag visualizable)
+           | LetNode StringExp (Maybe ([Position], Nodexp)) StringExp   -- Definicion de nodo LetNode(id, posiciones, tag visualizable)
            | Set Nodexp                                                     -- Seteo de arista
            | If Bexp Cmd Cmd                                                -- Condicional
            | For Iexp Iexp Cmd                                              -- For
