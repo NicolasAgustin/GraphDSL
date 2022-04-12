@@ -249,9 +249,9 @@ cmdparser = try (do reserved lis "if"
             <|> try (do reserved lis "GRAPH"            -- Definicion de grafo
                         -- Parseamos el nombre para el grafo (.pdf final) y la distancia entre nodos 
                         (name, distancia) <- parens lis (do n <- strexp; char ','; dist <- intexp; return (n, dist))
-                        return (Graph name distancia))
-            <|> try (do reserved lis "END"              -- Cierre de definicion
-                        return End)
+                        cmd <- cmdparse
+                        reserved lis "END"
+                        return (Graph name distancia cmd))
             <|> try (do reserved lis "log"
                         whiteSpace lis
                         str <- parens lis strexp

@@ -67,6 +67,5 @@ data Cmd = Let Var Iexp                                                     -- D
            | Seq Cmd Cmd                                                    -- Secuenciador
            | Log StringExp                                                -- Salida por pantalla
            | Pass                                                           -- Pass
-           | Graph StringExp Iexp                                           -- Definicion de grafo
-           | End                                                            -- Cierre de definicion de grafo
+           | Graph StringExp Iexp Cmd                                           -- Definicion de grafo
            deriving (Show, Eq)
