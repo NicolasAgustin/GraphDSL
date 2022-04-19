@@ -18,7 +18,7 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                   , reservedNames = ["true","false","pass","if",
                                                      "then","else","end",
                                                      "for", "or", "and", "not", "string", "int", "str", "to", "while",
-                                                     "print", "input", "write", "read", "insert", "edge", "above", "below",
+                                                     "print", "input", "write", "read", "node", "edge", "above", "below",
                                                      "right", "left", "of", "GRAPH", "END"]
                                   , reservedOpNames = [  "+"
                                                        , "-"
@@ -56,12 +56,12 @@ type Parser' = Parsec String [(String, Types)]
 
 -- Primer orden sintactico
 nodexp :: Parser' Nodexp
-nodexp = chainl1 (try (do parens lis nodexp2)
+nodexp = chainl1 (try (do braces lis nodexp2)
                   <|> try nodexp2) (try (do whiteSpace lis; reserved lis "<-"; return RightTo))
 
 -- Segundo orden sintactico
 nodexp2 :: Parser' Nodexp
-nodexp2 = chainl1 (try (do braces lis nodexp3) 
+nodexp2 = chainl1 (try (do braces lis nodexp3)
                    <|> nodexp3) (try (do whiteSpace lis; reserved lis "->"; return LeftTo))
 
 -- Tercer orden sintactico
@@ -246,9 +246,10 @@ cmdparser = try (do reserved lis "if"
                     option (If cond cmd Pass) (do reserved lis "else"           -- Else opcional
                                                   cmd2 <- braces lis cmdparse           -- Parseamos comando entre llaves           
                                                   return (If cond cmd cmd2)))
-            <|> try (do reserved lis "GRAPH"            -- Definicion de grafo
+            <|> try (do whiteSpace lis
+                        reserved lis "GRAPH"            -- Definicion de grafo
                         -- Parseamos el nombre para el grafo (.pdf final) y la distancia entre nodos 
-                        (name, distancia) <- parens lis (do n <- strexp; char ','; dist <- intexp; return (n, dist))
+                        (name, distancia) <- parens lis (do whiteSpace lis; n <- strexp; char ','; dist <- intexp; return (n, dist))
                         cmd <- cmdparse
                         reserved lis "END"
                         return (Graph name distancia cmd))
@@ -269,9 +270,10 @@ cmdparser = try (do reserved lis "if"
                         cmd <- braces lis cmdparse
                         return (While cond cmd))
             <|> try (do whiteSpace lis
-                        reserved lis "insert"
-                        (nd, tag, dir) <- braces lis parseInsert        -- Parseamos nodo id, posiciones, tag
-                        return (LetNode nd dir tag))
+                        reserved lis "node"
+                        -- parseNodeCmd 
+                        (n_id, x, y) <- between (whiteSpace lis) (whiteSpace lis) parseNodeCmd        -- Parseamos nodo id, posiciones, tag
+                        return (LetNodeCoord n_id x y))
             <|> try (do whiteSpace lis
                         reserved lis "edge"
                         nexp <- nodexp          -- Parseamos la expresion de nodo (ConstNode, LeftTo, RightTo, LeftRight, etc)
@@ -288,7 +290,7 @@ cmdparser = try (do reserved lis "if"
                         sdef <- strexp
                         modifyState (updatePState str PCadena)          -- Idem 
                         return (LetStr str sdef))
-            <|> try (do str <- identifier lis
+            <|> try (do str <- identifier lis   -- i = 0 o s = "hola"
                         reservedOp lis "="
                         st <- getState          -- Obtenemos el estado de parsec
                         case lookforPState str st of    -- Buscamos la variable en el estado
@@ -297,13 +299,24 @@ cmdparser = try (do reserved lis "if"
                                         PCadena -> LetStr str <$> strexp
                                         PEntero -> Let str <$> intexp)
 
+parseNodeCmd :: Parser' (StringExp, Iexp, Iexp)
+parseNodeCmd = do whiteSpace lis 
+                  node_id <- braces lis strexp -- node {"id"}<0,0>
+                  char '<'
+                  x <- intexp
+                  char ','
+                  y <- intexp      
+                  char '>'
+                  return (node_id, x, y)
+
+
 -- Parser para el comando insert
 parseInsert :: Parser' (StringExp , StringExp, Maybe ([Position], Nodexp))
 parseInsert = do whiteSpace lis
                  nd <- parseStrParens           -- Intenta parsear con o sin parentesis
                  char ','
                  tag <- parseStrParens
-                 dir <- optionMaybe (do 
+                 dir <- optionMaybe (do
                             whiteSpace lis
                             char ','
                             p <- many parseDirection    -- Parseamos las diferentes direcciones (above, below, right, left)
@@ -314,10 +327,10 @@ parseInsert = do whiteSpace lis
 
 parseNodeVarParens :: Parser' Nodexp
 parseNodeVarParens = try (do parens lis nodexp)
-                     <|> try nodexp 
+                     <|> try nodexp
 
 -- Parser para intentar parsear lo mismo con parentesis y sin
-parseStrParens :: Parser' StringExp  
+parseStrParens :: Parser' StringExp
 parseStrParens = try (do parens lis strexp)
                  <|> try strexp
 

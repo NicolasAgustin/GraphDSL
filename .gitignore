@@ -4,3 +4,4 @@ latex/
 *.tex
 *.log
 *.aux
+*.lg

@@ -1,9 +1,39 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module Ast where
+import Data.Data
 
 type Var = String 
 
 -- Este tipo se tiene que sacar
 data GenExpType = ExpStr StringExp | ExpInt Iexp deriving (Show, Eq)
+
+data DataType' = Entero Integer
+                | Cadena String
+                -- Id: string X: Integer Y: Integer
+                | Node String Integer Integer
+                | Output [String]
+                deriving (Data)
+
+-- Tipo de dato para especificar los distintos tipos
+
+instance Show DataType' where
+    show (Entero x)   = "Entero " ++ show x
+    show (Cadena s)   = "Cadena " ++ show s
+    show (Node i d t) = "Nodo " ++ show i ++ " " ++ show d ++ " " ++ show t
+    show (Output l)   = "Output " ++ concat l
+
+-- Instancia de comparacion para los tipos
+instance Eq DataType' where
+    (==) (Entero x) (Entero x2)       = x == x2
+    (==) (Entero _) (Cadena _)        = False
+    (==) (Cadena _) (Entero _)        = False
+    (==) (Cadena s) (Cadena s2)       = s == s2
+    (==) Node {} (Entero _)           = False
+    (==) Node {} (Cadena _)           = False
+    (==) (Node i d t) (Node i2 d2 t2) = (i,d,t) == (i2,d2,t2)
+    (==) _ Node {}                    = False
+    (==) (Output l) _                 = False
+    (==) _ (Output l)                 = False
 
 -- Expresiones enteras
 data Iexp = Plus Iexp Iexp          -- Suma
@@ -24,13 +54,13 @@ instance Show Position where
     show PRight = "right"
     show PLeft  = "left"
     show Above  = "above"
-    show Below  = "below"  
+    show Below  = "below"
 
 -- Expresiones de nodos
-data Nodexp = LeftTo Nodexp Nodexp          -- Arista de izquierda a derecha 
-              | RightTo Nodexp Nodexp       -- Arista de derecha a izquierda
-              | LeftRight Nodexp Nodexp     -- Arista bidireccional
-              | NodeVar Var                 -- Variable nodo
+data Nodexp = LeftTo Nodexp Nodexp          -- Arista de izquierda a derecha n->n2
+              | RightTo Nodexp Nodexp       -- Arista de derecha a izquierda n<-n2
+              | LeftRight Nodexp Nodexp     -- Arista bidireccional n-n2
+              | NodeVar Var                 -- Variable nodo 
               | ConstNode StringExp         -- Expresion de string para los id de nodos
               deriving (Show, Eq)
 
@@ -60,6 +90,7 @@ data StringExp = Str String                     -- String literal
 data Cmd = Let Var Iexp                                                     -- Definicion entera
            | LetStr Var StringExp                                           -- Definicion string
            | LetNode StringExp (Maybe ([Position], Nodexp)) StringExp   -- Definicion de nodo LetNode(id, posiciones, tag visualizable)
+           | LetNodeCoord StringExp Iexp Iexp 
            | Set Nodexp                                                     -- Seteo de arista
            | If Bexp Cmd Cmd                                                -- Condicional
            | For Iexp Iexp Cmd                                              -- For
