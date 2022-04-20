@@ -14,6 +14,10 @@ splitOn p s =  case dropWhile (p==) s of
 flattenLines :: [String] -> String
 flattenLines = concat
 
+joinLines :: [String] -> Char -> String 
+joinLines [] _       = ""
+joinLines (h:rest) c = h ++ [c] ++ joinLines rest c
+
 format :: String -> [String] -> String
 format str [] = str
 format str (h:rest) = format result_string rest

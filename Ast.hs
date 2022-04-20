@@ -1,17 +1,21 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module Ast where
 import Data.Data
-
+-- import OrientationMapper (Mapper)
+import Matriz
 type Var = String 
 
 -- Este tipo se tiene que sacar
 data GenExpType = ExpStr StringExp | ExpInt Iexp deriving (Show, Eq)
+
+type Mapper = Matrix DataType'
 
 data DataType' = Entero Integer
                 | Cadena String
                 -- Id: string X: Integer Y: Integer
                 | Node String Integer Integer
                 | Output [String]
+                | Grid Mapper
                 deriving (Data)
 
 -- Tipo de dato para especificar los distintos tipos
@@ -21,6 +25,7 @@ instance Show DataType' where
     show (Cadena s)   = "Cadena " ++ show s
     show (Node i d t) = "Nodo " ++ show i ++ " " ++ show d ++ " " ++ show t
     show (Output l)   = "Output " ++ concat l
+    show (Grid m)     = show m
 
 -- Instancia de comparacion para los tipos
 instance Eq DataType' where
@@ -34,6 +39,9 @@ instance Eq DataType' where
     (==) _ Node {}                    = False
     (==) (Output l) _                 = False
     (==) _ (Output l)                 = False
+    (==) (Grid m) (Grid m2)           = m == m 
+    (==) _ (Grid m)                   = False
+    (==) (Grid m) _                   = False  
 
 -- Expresiones enteras
 data Iexp = Plus Iexp Iexp          -- Suma
@@ -98,5 +106,5 @@ data Cmd = Let Var Iexp                                                     -- D
            | Seq Cmd Cmd                                                    -- Secuenciador
            | Log StringExp                                                -- Salida por pantalla
            | Pass                                                           -- Pass
-           | Graph StringExp Iexp Cmd                                           -- Definicion de grafo
+           | Graph StringExp Iexp Iexp Cmd                                           -- Definicion de grafo
            deriving (Show, Eq)

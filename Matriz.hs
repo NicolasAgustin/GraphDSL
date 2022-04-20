@@ -3,12 +3,12 @@
 {-# HLINT ignore "Use drop" #-}
 {-# HLINT ignore "Use take" #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Matriz where
-
-import Ast
+import Data.Data
 import Data.List (elemIndex)
 
-newtype Matrix a = M [[a]] deriving (Eq)
+newtype Matrix a = M [[a]] deriving (Eq, Data)
 
 type Coord = (Integer, Integer)
 
@@ -27,9 +27,9 @@ getMatrix (M m) = m
 empty :: Matrix a
 empty = M [[]]
 
-build :: a -> Int -> Matrix a
+build :: a -> Integer -> Matrix a
 build e 0 = M [[]]
-build e n = M $ replicate n (replicate n e)
+build e n = M $ replicate (fromIntegral n) (replicate (fromIntegral n) e)
 
 dimensions :: Matrix a -> (Integer, Integer)
 dimensions (M []) = (0, 0)
@@ -117,13 +117,3 @@ calculateLimit (ri, ci) (rs, cs) = ((r_upper, c_upper), (r_lower, c_lower))
                                     r_lower = if (ri+1) < rs then ri+1 else ri
                                     c_lower = if (ci+1) < cs then ci+1 else ci
 
-test :: Matrix DataType'
-test = build (Node "id" 0 0) 4
-
-m = M [
-    [1,2,3,4,5],
-    [6,7,8,9,10],
-    [11,12,13,14,15],
-    [16,17,18,19,20],
-    [21,22,23,24,25]
-    ]

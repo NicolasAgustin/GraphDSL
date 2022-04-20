@@ -2,11 +2,12 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module Evaluador where
-import Utils ( flattenLines, format, append )
+import Utils ( flattenLines, format, append, joinLines )
 import Control.Applicative (pure, (<*>))
 import Control.Monad (liftM, ap, when)
 import Control.Monad.Except (ExceptT)
 import Ast
+import Matriz
 import Data.String (lines)
 import Data.Data ( Data(toConstr) )
 import Data.Dynamic ()
@@ -23,23 +24,7 @@ import GHC.IO (catchAny)
 import System.IO ()
 import Data.Char (toLower, isSpace)
 import System.Process ( callCommand )
-
-{-
-    TODO:
-    - CAMBIAR TIKZ POR TKZ-GRAPH y cambiar direcciones por indices de matriz (below left por x=0 y=0)
-    - Ver si se puede cambiar la distancia entre nodos de forma dinamica (podria ser una primitiva)
-        Con xshift y yshift podemos manejar el espaciado
-            ejemplo = \node[main] (node1) [below of=node0, yshift=5mm] {$node1$}; 
-            Lo que se podria hacer es setear una variable y cada vez que se crea un nodo setear la distancia buscando esa variable
-            Definir primitiva para controlar el valor de esta variable
-    - Definir primitiva para cambiar el tamanio de los nodos
-        Con scale se puede cambiar el tamanio de un nodo
-            ejemplo = \node[main] (node1) [below of=node0, yshift=5mm, scale=0.3] {$node1$};
-    - Ver como se puede cambiar el color de una arista, nodo o tag (primitiva)
-        Para cambiar el color de un nodo se puede usar fill, pasandole los 3 valores rgb
-            ejemplo = \node[main] (node1) [below of=node0, yshift=5mm, scale=0.3, fill={rgb:red,4;green,2;yellow,1}] {$node1$};
-    - Ver como agregar tag a una arista (agregar a la primitiva de edge)
--}
+import OrientationMapper (process)
 
 -- Tipo de dato para agrupar las monadas (transformadores)
 type Eval a = ExceptT String (StateT Env IO) a
@@ -53,7 +38,9 @@ initState = [
     ("COUNTER", Entero 0),
     ("ERR", Cadena ""),
     ("LOGGER", Entero 0),
-    ("OUTPUT", Output [])
+    ("OUTPUT", Output []),
+    ("MATRIX", Grid (M [])),
+    ("EDGES", Cadena "")
     ]
 
 eval :: Cmd -> Eval ()
@@ -131,24 +118,37 @@ evalComm (LetNodeCoord id x y)      = do
     nodeName <- evalStrExp id
     x_value <- evalIntExp x
     y_value <- evalIntExp y
+    matrix <- getValueFromState "MATRIX"
+    (b, dato) <- typeChecker matrix (Grid empty)
+    final_matrix <- gridGet dato
+    updateValueFromState "MATRIX" (Grid $ set (x_value, y_value) (Node nodeName x_value y_value) final_matrix)
     updateValueFromState nodeName (Node nodeName x_value y_value)
-    writeOutput (format "\\Vertex[x=%, y=%]{%}\n" [show x_value, show y_value, nodeName])
--- evalComm (LetNode id dir tag)       = do
---     nodeName <- evalStrExp id   -- Identificador del nodo
---     ttag <- evalStrExp tag      -- Tag que se va a visualizar en el grafico
---     sid <- makeStringDirections dir
---     updateValueFromState nodeName (Node nodeName sid ttag)
---     writeOutput $ "\\node[main] (" ++ nodeName ++ ") [" ++ sid ++ "] " ++ "{$" ++ ttag ++ "$};\n"
 evalComm (Set ndexp)                = do
     tw <- evalNodexp ndexp
-    writeOutput tw
-evalComm (Graph name distancia cmd) = do
+    edges <- getValueFromState "EDGES"
+    (b, dato) <- typeChecker edges (Cadena "")
+    f_edges <- cadenaGet dato
+    updateValueFromState "EDGES" (Cadena (f_edges ++ tw))
+evalComm (Graph name distancia msize cmd) = do
     strName <- evalStrExp name     -- Nombre del grafico
     dist <- evalIntExp distancia   -- Distancia entre nodos
+    size <- evalIntExp msize       -- Tamanio de la matriz 
     updateValueFromState "NAME" (Cadena strName)
+    updateValueFromState "MATRIX" (Grid (build (Node "" 0 0) size))
     writeOutput $ "\\documentclass{article}\n\\usepackage{tkz-graph}\n\\begin{document}\n \
-    \ \\begin{tikzpicture}[node distance={" ++ show dist ++ "mm} ,main/.style = {draw, circle}]\n"
+    \ \\begin{tikzpicture}[node distance={" ++ show dist ++ "mm} ,main/.style = {draw, circle}]\n \
+    \ \\SetGraphUnit{" ++ show size ++ "}"
+    --------------- EVALUACION DE LOS COMANDOS DEL GRAFICO --------------------
     evalComm cmd
+    ---------------------------------------------------------------------------
+    matrix <- getValueFromState "MATRIX"
+    (b, dato) <- typeChecker matrix (Grid empty)
+    final_matrix <- gridGet dato
+    writeOutput $ joinLines (process final_matrix) '\n'
+    edges <- getValueFromState "EDGES"
+    (b, dato) <- typeChecker edges (Cadena "")
+    f_edges <- cadenaGet dato
+    writeOutput f_edges
     name <- getValueFromState "NAME"
     (b, dato) <- typeChecker name (Cadena "")
     name <- cadenaGet dato
@@ -179,6 +179,9 @@ outputGet (Output l) = return l
 
 nodeGet :: DataType' -> Eval (String, Integer, Integer)
 nodeGet (Node i x y) = return (i, x, y)
+
+gridGet :: DataType' -> Eval Mapper
+gridGet (Grid m) = return m
 
 typeChecker :: Either String DataType' -> DataType' -> Eval (Bool, DataType')
 typeChecker (Left s) _ = throwE s

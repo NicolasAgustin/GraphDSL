@@ -49,12 +49,11 @@ type Parser' = Parsec String [(String, Types)]
 
 {- EXPRESIONES DE NODO -}
 
-{- Cada orden sintactico intenta parsear lo mismo pero entre parentesis, con esto podemos tener:
-        ("Nodo" & str(i)) -> ("Nodo" & str(i+1)) === "Nodo" & str(i) -> "Nodo" & str(i+1)
-   Esto aporta meramente a la legibilidad
--}
-
 -- Primer orden sintactico
+{-
+        TODO: 
+        Hay que revisar los ordenes sintacticos porque falla cuando trata de parsear <-
+-}
 nodexp :: Parser' Nodexp
 nodexp = chainl1 (try (do braces lis nodexp2)
                   <|> try nodexp2) (try (do whiteSpace lis; reserved lis "<-"; return RightTo))
@@ -250,9 +249,10 @@ cmdparser = try (do reserved lis "if"
                         reserved lis "GRAPH"            -- Definicion de grafo
                         -- Parseamos el nombre para el grafo (.pdf final) y la distancia entre nodos 
                         (name, distancia) <- parens lis (do whiteSpace lis; n <- strexp; char ','; dist <- intexp; return (n, dist))
+                        msize <- brackets lis intexp
                         cmd <- cmdparse
                         reserved lis "END"
-                        return (Graph name distancia cmd))
+                        return (Graph name distancia msize cmd))
             <|> try (do reserved lis "log"
                         whiteSpace lis
                         str <- parens lis strexp

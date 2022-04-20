@@ -3,15 +3,15 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# HLINT ignore "Eta reduce" #-}
 module OrientationMapper where
-import Matriz ( Matrix , Matrix(M), set, get, empty, build, mmap, search, calculateLimit, dimensions, m, near, getMatrix)
-import Ast (DataType' (Node))
+import Matriz ( Matrix , Matrix(M), set, get, empty, build, mmap, search, calculateLimit, dimensions, near, getMatrix)
+import Ast (DataType' (Node), Mapper)
 
 import Utils (format)
 import GHC.TopHandler (runIO)
 
 -- data MNode = MNode DataType' deriving (Show, Eq)
 
-type Mapper = Matrix DataType'
+
 
 insert :: DataType' -> Mapper -> Mapper
 insert n@(Node id r c) m = set (r, c) n m
@@ -54,10 +54,10 @@ getOrientation (Node id y x) (Node id2 y2 x2)
     | x == x2 && y > y2  = format "\\SO(%) {%}" [id2, id]
     | x > x2 && y == y2  = format "\\EA(%) {%}" [id2, id]
     | x < x2 && y > y2   = format "\\NOEA(%) {%}" [id2, id]
-    | x < x2 && y < y2   = format "\\SOEA(%) {%}" [id2, id]
+    | x > x2 && y > y2   = format "\\SOEA(%) {%}" [id2, id]
     | x < x2 && y == y2  = format "\\WE(%) {%}" [id2, id]
     | x > x2 && y < y2   = format "\\NOWE(%) {%}" [id2, id]
-    | x > x2 && y > y2   = format "\\SOWE(%) {%}" [id2, id]
+    | x < x2 && y < y2   = format "\\SOWE(%) {%}" [id2, id]
     -- 0 0
     -- 0 1
 -- toOrientations' :: Mapper -> (Int, Int) -> String
