@@ -55,27 +55,27 @@ type Parser' = Parsec String [(String, Types)]
         Hay que revisar los ordenes sintacticos porque falla cuando trata de parsear <-
 -}
 nodexp :: Parser' Nodexp
-nodexp = chainl1 (try (do braces lis nodexp2)
-                  <|> try nodexp2) (try (do whiteSpace lis; reserved lis "<-"; return RightTo))
-
--- Segundo orden sintactico
-nodexp2 :: Parser' Nodexp
-nodexp2 = chainl1 (try (do braces lis nodexp3)
-                   <|> nodexp3) (try (do whiteSpace lis; reserved lis "->"; return LeftTo))
-
--- Tercer orden sintactico
-nodexp3 :: Parser' Nodexp
-nodexp3 = chainl1 (try (do braces lis nodexp4)
-                   <|> nodexp4) (try (do whiteSpace lis; reserved lis "<->"; return LeftRight))
-
--- Cuarto orden sintactico
-nodexp4 :: Parser' Nodexp
-nodexp4 = try (do whiteSpace lis
-                  var <- identifier lis
-                  return (NodeVar var))
-          <|> try (do whiteSpace lis
-                      str <- strexp
-                      return (ConstNode str))
+nodexp = try (do whiteSpace lis
+                 n1 <- braces lis nodexp
+                 reserved lis "<-"
+                 n2 <- braces lis nodexp
+                 return (RightTo n1 n2))
+         <|> try (do whiteSpace lis
+                     n1 <- braces lis nodexp
+                     reserved lis "->"
+                     n2 <- braces lis nodexp
+                     return (LeftTo n1 n2))
+         <|> try (do whiteSpace lis
+                     n1 <- braces lis nodexp
+                     reserved lis "<->"
+                     n2 <- braces lis nodexp
+                     return (LeftRight n1 n2))
+         <|> try (do whiteSpace lis
+                     var <- identifier lis
+                     return (NodeVar var))
+         <|> try (do whiteSpace lis
+                     str <- strexp
+                     return (ConstNode str))
 
 {--------------------------------------------------------------------------------------------------}
 
@@ -276,8 +276,9 @@ cmdparser = try (do reserved lis "if"
                         return (LetNodeCoord n_id x y))
             <|> try (do whiteSpace lis
                         reserved lis "edge"
+                        maybe_tag <- optionMaybe strexp
                         nexp <- nodexp          -- Parseamos la expresion de nodo (ConstNode, LeftTo, RightTo, LeftRight, etc)
-                        return (Set nexp))
+                        return (Set maybe_tag nexp))
             <|> try (do tipo <- reserved lis "int"
                         str <- identifier lis
                         reservedOp lis "="

@@ -14,6 +14,10 @@ splitOn p s =  case dropWhile (p==) s of
 flattenLines :: [String] -> String
 flattenLines = concat
 
+replace :: String -> (Char, String) -> String 
+replace [] _            = []
+replace (h:rest) (d, s) = if h == d then s ++ rest else h : replace rest (d, s)   
+
 joinLines :: [String] -> Char -> String 
 joinLines [] _       = ""
 joinLines (h:rest) c = h ++ [c] ++ joinLines rest c
