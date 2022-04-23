@@ -92,13 +92,6 @@ near e ma@(M (l:rest)) = neighbors (fp, sp) ma
 fst' :: (a, a) -> a
 fst' (x,_) = x
 
--- printt :: (Coord, Coord) -> IO ()
--- printt c = do
---             print ("new_rows: " ++ show a)
---             print ("new_rows_b: " ++ show b)
---             where
---                 (a, b) = extractNear c m
-
 sublist :: (Eq a) => Integer -> Integer -> [a] -> [a]
 sublist from to l = if from == to then [l !! fromIntegral from] else l !! fromIntegral from : sublist (from+1) to l
 

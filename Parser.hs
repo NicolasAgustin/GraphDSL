@@ -40,6 +40,7 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                                        , "<-"
                                                        , "->"
                                                        , "<->"
+                                                       , "%"
                                                        ]
                                    }
                                  )
@@ -222,6 +223,8 @@ multp = try (do reservedOp lis "*"
                 return Times)
         <|> try (do reservedOp lis "/"
                     return Div)
+        <|> try (do reservedOp lis "%"
+                    return Mod)
 
 {--------------------------------------------------------------------------------------------------}
 
@@ -291,7 +294,7 @@ cmdparser = try (do reserved lis "if"
                         sdef <- strexp
                         modifyState (updatePState str PCadena)          -- Idem 
                         return (LetStr str sdef))
-            <|> try (do str <- identifier lis   -- i = 0 o s = "hola"
+            <|> try (do str <- identifier lis
                         reservedOp lis "="
                         st <- getState          -- Obtenemos el estado de parsec
                         case lookforPState str st of    -- Buscamos la variable en el estado

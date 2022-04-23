@@ -53,6 +53,7 @@ data Iexp = Plus Iexp Iexp          -- Suma
             | Variable Var          -- Variable
             | Len StringExp         -- Longitud de string
             | IntCast StringExp     -- Casteo a entero
+            | Mod Iexp Iexp
             deriving (Show, Eq)
 
 data Position = Above | Below | PRight | PLeft deriving (Eq)

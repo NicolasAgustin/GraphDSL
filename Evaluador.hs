@@ -336,6 +336,9 @@ evalIntExp (Div l r)    = do e1 <- evalIntExp l
 evalIntExp (Times l r)   = do e1 <- evalIntExp l
                               e2 <- evalIntExp r
                               return (e1 * e2)
+evalIntExp (Mod l r)     = do e1 <- evalIntExp l
+                              e2 <- evalIntExp r
+                              return (e1 `mod` e2)
 evalIntExp (Uminus l)    = do e1 <- evalIntExp l
                               return (negate e1)
 evalIntExp (Len str)     = do s <- evalStrExp str
