@@ -4,10 +4,10 @@
 module Evaluador where
 import Utils ( flattenLines, format, append, joinLines, replace )
 import Control.Applicative (pure, (<*>))
-import Control.Monad (liftM, ap, when)
+import Control.Monad (liftM, ap, when, unless)
 import Control.Monad.Except (ExceptT)
 import Ast
-import Control.Exception (catch, IOException)
+import Control.Exception (catch, IOException, evaluate)
 import Matriz ( build, empty, set, Matrix(M) )
 import Data.String (lines)
 import Data.Data ( Data(toConstr) )
@@ -44,6 +44,8 @@ initState = [
     ("EDGES", Cadena ""),
     ("DIST", Entero 0)
     ]
+
+colors = ["red","blue","green","yellow","black","white","brown","purple","grey","orange","pink"]
 
 eval :: Cmd -> Eval ()
 eval p = do evalCommInit p
@@ -161,9 +163,9 @@ evalComm (LetNodeCoord id x y)      = do
     updateValueFromState "MATRIX" (Grid $ set (x_value, y_value) (Node nodeName x_value y_value) final_matrix)
     updateValueFromState nodeName (Node nodeName x_value y_value)
 -- Insercion de aristas
-evalComm (Set tagexp ndexp)         = do
+evalComm (Set edge_color tagexp ndexp) = do
     -- Tag para la arista (peso)
-    tag <- addTag tagexp
+    tag <- addOptions edge_color tagexp
     -- Generamos la string que necesita latex
     tw <- evalNodexp ndexp
     edges <- getValueFromState "EDGES"
@@ -229,11 +231,19 @@ evalComm (Graph name distancia msize cmd) = do
     Return:
         Texto parseado
 -}
-addTag :: Maybe StringExp -> Eval String 
-addTag m_tag = do case m_tag of 
-                    Nothing -> return ""
-                    Just s  -> do tag <- evalStrExp s
-                                  return (format ",label=$%$" [tag])  
+addOptions :: Maybe StringExp -> Maybe StringExp -> Eval String
+addOptions color tag = do case tag of
+                            Nothing -> return ""
+                            Just s  -> do tag <- evalStrExp s
+                                          case color of
+                                            Nothing -> return (format ",label=$%$" [tag])
+                                            Just c  -> do
+                                                        evaluated_color <- evalStrExp c
+                                                        colorChecker evaluated_color
+                                                        return (format ",label=$%$,color=%" [tag, evaluated_color])
+
+colorChecker :: String -> Eval ()
+colorChecker color = do when (color `notElem` colors) $ throwE "Color no definido"
 
 cadenaGet :: DataType' -> Eval String
 cadenaGet (Cadena s) = return s
@@ -253,11 +263,11 @@ gridGet (Grid m) = return m
 -- Chequeador de tipos
 typeChecker :: Either String DataType' -> DataType' -> Eval (Bool, DataType')
 typeChecker (Left s) _ = throwE s
-typeChecker (Right d) s = do 
+typeChecker (Right d) s = do
     if toConstr d == toConstr s then return (True, d)
     else throwE (
         format "No coinciden los tipos. Se recibio % pero se esperaba %." [show (toConstr d), show (toConstr s)]
-        ) 
+        )
 {-
     Descripcion:
         Funcion para generar la string necesaria para el archivo .tex
@@ -267,10 +277,10 @@ typeChecker (Right d) s = do
     Return:
         String para latex
 -}
-genNodeString :: (String, String) -> String -> Eval String 
+genNodeString :: (String, String) -> String -> Eval String
 genNodeString (n1, []) op = throwE (format "Falta el operando derecho para %." [op])
 genNodeString ([], n2) op = throwE (format "Falta el operando izquierdo para %." [op])
-genNodeString (n1, n2) op = do 
+genNodeString (n1, n2) op = do
     if n1 == n2 then do
         m_dist <- getValueFromState "DIST"
         (b, dato) <- typeChecker m_dist (Entero 0)

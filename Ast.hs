@@ -56,7 +56,7 @@ data Iexp = Plus Iexp Iexp          -- Suma
             | Mod Iexp Iexp
             deriving (Show, Eq)
 
-data Position = Above | Below | PRight | PLeft deriving (Eq)
+data Position = Above | Below | PRight | PLeft deriving (Eq) 
 
 -- Instancia de Show para el tipo de dato Position
 instance Show Position where
@@ -72,6 +72,7 @@ data Nodexp = LeftTo Nodexp Nodexp          -- Arista de izquierda a derecha n->
               | NodeVar Var                 -- Variable nodo 
               | ConstNode StringExp         -- Expresion de string para los id de nodos
               deriving (Show, Eq)
+
 
 -- Expresiones booleanas
 data Bexp = Btrue                           -- True
@@ -97,9 +98,8 @@ data StringExp = Str String                     -- String literal
 
 data Cmd = Let Var Iexp                                                     -- Definicion entera
            | LetStr Var StringExp                                           -- Definicion string
-           | LetNode StringExp (Maybe ([Position], Nodexp)) StringExp   -- Definicion de nodo LetNode(id, posiciones, tag visualizable)
            | LetNodeCoord StringExp Iexp Iexp 
-           | Set (Maybe StringExp) Nodexp                                                     -- Seteo de arista
+           | Set (Maybe StringExp) (Maybe StringExp) Nodexp                                                -- Seteo de arista
            | If Bexp Cmd Cmd                                                -- Condicional
            | For Iexp Iexp Cmd                                              -- For
            | While Bexp Cmd                                                 -- While
