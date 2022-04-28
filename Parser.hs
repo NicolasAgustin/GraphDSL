@@ -16,7 +16,7 @@ data Types = PEntero | PCadena deriving (Show, Eq)
 lis :: TokenParser u
 lis = makeTokenParser (emptyDef   { commentLine   = "#"
                                   , reservedNames = ["true","false","pass","if",
-                                                     "then","else","end",
+                                                     "then","else","end", "color",
                                                      "for", "or", "and", "not", "string", "int", "str", "to", "while",
                                                      "print", "input", "write", "read", "node", "edge", "above", "below",
                                                      "right", "left", "of", "GRAPH", "END"]
@@ -50,7 +50,6 @@ type Parser' = Parsec String [(String, Types)]
 
 {- EXPRESIONES DE NODO -}
 
--- Primer orden sintactico
 {-
         TODO: 
         Hay que revisar los ordenes sintacticos porque falla cuando trata de parsear <-
@@ -279,9 +278,10 @@ cmdparser = try (do reserved lis "if"
                         return (LetNodeCoord n_id x y))
             <|> try (do whiteSpace lis
                         reserved lis "edge"
+                        edge_color <- optionMaybe strexp
                         maybe_tag <- optionMaybe strexp
                         nexp <- nodexp          -- Parseamos la expresion de nodo (ConstNode, LeftTo, RightTo, LeftRight, etc)
-                        return (Set maybe_tag nexp))
+                        return (Set edge_color maybe_tag nexp))
             <|> try (do tipo <- reserved lis "int"
                         str <- identifier lis
                         reservedOp lis "="
