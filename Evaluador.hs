@@ -42,7 +42,8 @@ initState = [
     ("OUTPUT", Output []),
     ("MATRIX", Grid (M [])),
     ("EDGES", Cadena ""),
-    ("DIST", Entero 0)
+    ("DIST", Entero 0),
+    ("COLORS", Colors [])
     ]
 
 colors = ["red","blue","green","yellow","black","white","brown","purple","grey","orange","pink"]
@@ -162,6 +163,14 @@ evalComm (LetNodeCoord id x y)      = do
     -- Agregamos el nodo en la matriz
     updateValueFromState "MATRIX" (Grid $ set (x_value, y_value) (Node nodeName x_value y_value) final_matrix)
     updateValueFromState nodeName (Node nodeName x_value y_value)
+evalComm (Color colorexp node) = do
+    color <- evalStrExp colorexp
+    n <- evalNodexp node
+    if map toLower color `notElem` colors then throwE "Color no valido"
+    else do color_list <- getValueFromState "COLORS"
+            (_, dato) <- typeChecker color_list (Colors [])
+            colors <- colorGet dato 
+            updateValueFromState "COLORS" (Colors (colors ++ [(n, color)]))
 -- Insercion de aristas
 evalComm (Set edge_color tagexp ndexp) = do
     -- Tag para la arista (peso)
@@ -193,6 +202,7 @@ evalComm (Graph name distancia msize cmd) = do
     --------------- EVALUACION DE LOS COMANDOS DEL GRAFICO --------------------
     evalComm cmd
     ---------------------------------------------------------------------------
+    -- FALTA AGREGAR LA AGRUPACION POR COLORES
     matrix <- getValueFromState "MATRIX"
     (b, dato) <- typeChecker matrix (Grid empty)
     final_matrix <- gridGet dato
@@ -256,6 +266,9 @@ outputGet (Output l) = return l
 
 nodeGet :: DataType' -> Eval (String, Integer, Integer)
 nodeGet (Node i x y) = return (i, x, y)
+
+colorGet :: DataType' -> Eval [(String, String)]
+colorGet (Colors f) = return f 
 
 gridGet :: DataType' -> Eval Mapper
 gridGet (Grid m) = return m

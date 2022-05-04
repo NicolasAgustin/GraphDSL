@@ -276,6 +276,11 @@ cmdparser = try (do reserved lis "if"
                         -- parseNodeCmd 
                         (n_id, x, y) <- between (whiteSpace lis) (whiteSpace lis) parseNodeCmd        -- Parseamos nodo id, posiciones, tag
                         return (LetNodeCoord n_id x y))
+            <|> try (do reserved lis "color"
+                        whiteSpace lis
+                        color <- strexp
+                        node <- braces lis nodexp
+                        return (Color color node))
             <|> try (do whiteSpace lis
                         reserved lis "edge"
                         edge_color <- optionMaybe strexp

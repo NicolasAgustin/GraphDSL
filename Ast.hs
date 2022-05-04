@@ -15,6 +15,7 @@ data DataType' = Entero Integer
                 -- Id: string X: Integer Y: Integer
                 | Node String Integer Integer
                 | Output [String]
+                | Colors [(String, String)]
                 | Grid Mapper
                 deriving (Data)
 
@@ -73,7 +74,6 @@ data Nodexp = LeftTo Nodexp Nodexp          -- Arista de izquierda a derecha n->
               | ConstNode StringExp         -- Expresion de string para los id de nodos
               deriving (Show, Eq)
 
-
 -- Expresiones booleanas
 data Bexp = Btrue                           -- True
             | Bfalse                        -- False
@@ -100,6 +100,7 @@ data Cmd = Let Var Iexp                                                     -- D
            | LetStr Var StringExp                                           -- Definicion string
            | LetNodeCoord StringExp Iexp Iexp 
            | Set (Maybe StringExp) (Maybe StringExp) Nodexp                                                -- Seteo de arista
+           | Color StringExp Nodexp
            | If Bexp Cmd Cmd                                                -- Condicional
            | For Iexp Iexp Cmd                                              -- For
            | While Bexp Cmd                                                 -- While
