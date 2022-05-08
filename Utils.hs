@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Utils where
+import Data.List
 import System.IO
     ( hClose, openFile, hPutStrLn, IOMode(AppendMode) )
 
@@ -48,3 +49,6 @@ append path lines = do writeLines path (splitOn '\n' lines)
                                 hClose hd
                                 writeLines fp lines
 
+groupByColor :: [(String, String)] -> [[(String, String)]]
+groupByColor [] = []
+groupByColor l  = groupBy (\x y -> fst x == fst y) l 

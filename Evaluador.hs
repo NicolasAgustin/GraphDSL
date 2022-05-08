@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module Evaluador where
-import Utils ( flattenLines, format, append, joinLines, replace )
+import Utils ( flattenLines, format, append, joinLines, replace, groupByColor )
 import Control.Applicative (pure, (<*>))
 import Control.Monad (liftM, ap, when, unless)
 import Control.Monad.Except (ExceptT)
@@ -98,7 +98,7 @@ updateValueFromState varName value = modify (updateState varName value)
 -}
 writeOutput :: String -> Eval ()
 writeOutput str = do output <- getValueFromState "OUTPUT"
-                     (b, dato) <- typeChecker output (Output [])
+                     dato <- typeChecker output (Output [])
                      out <- outputGet dato
                      updateValueFromState "OUTPUT" (Output $ new out)
                         where new out = out ++ [str]
@@ -121,7 +121,7 @@ evalComm (Let v e)                  = do val <- evalIntExp e
 evalComm (Log str)                  = do s <- evalStrExp str
                                          -- Obtenemos el valor de la variable bandera LOGGER
                                          name <- getValueFromState "LOGGER"
-                                         (b, dato) <- typeChecker name (Entero 0)
+                                         dato <- typeChecker name (Entero 0)
                                          logger_flag <- enteroGet dato
                                          -- Cambiamos el valor, para que la proxima vez solamente hagamos append
                                          updateValueFromState "LOGGER" (Entero 1)
@@ -158,7 +158,7 @@ evalComm (LetNodeCoord id x y)      = do
     -- columnas
     y_value <- evalIntExp y
     matrix <- getValueFromState "MATRIX"
-    (b, dato) <- typeChecker matrix (Grid empty)
+    dato <- typeChecker matrix (Grid empty)
     final_matrix <- gridGet dato
     -- Agregamos el nodo en la matriz
     updateValueFromState "MATRIX" (Grid $ set (x_value, y_value) (Node nodeName x_value y_value) final_matrix)
@@ -168,9 +168,9 @@ evalComm (Color colorexp node) = do
     n <- evalNodexp node
     if map toLower color `notElem` colors then throwE "Color no valido"
     else do color_list <- getValueFromState "COLORS"
-            (_, dato) <- typeChecker color_list (Colors [])
+            dato <- typeChecker color_list (Colors [])
             colors <- colorGet dato 
-            updateValueFromState "COLORS" (Colors (colors ++ [(n, color)]))
+            updateValueFromState "COLORS" (Colors (colors ++ [(color, n)]))
 -- Insercion de aristas
 evalComm (Set edge_color tagexp ndexp) = do
     -- Tag para la arista (peso)
@@ -178,7 +178,7 @@ evalComm (Set edge_color tagexp ndexp) = do
     -- Generamos la string que necesita latex
     tw <- evalNodexp ndexp
     edges <- getValueFromState "EDGES"
-    (b, dato) <- typeChecker edges (Cadena "")
+    dato <- typeChecker edges (Cadena "")
     f_edges <- cadenaGet dato
     -- La arista viene con ! indicando donde poner el tag en caso de que se haya indicado uno
     -- Caso contrario reemplaza ! por ""
@@ -202,24 +202,31 @@ evalComm (Graph name distancia msize cmd) = do
     --------------- EVALUACION DE LOS COMANDOS DEL GRAFICO --------------------
     evalComm cmd
     ---------------------------------------------------------------------------
-    -- FALTA AGREGAR LA AGRUPACION POR COLORES
+    
+    ---------------------------------------------------------------------------
     matrix <- getValueFromState "MATRIX"
-    (b, dato) <- typeChecker matrix (Grid empty)
+    dato <- typeChecker matrix (Grid empty)
     final_matrix <- gridGet dato
     -- Proceso para establecer posiciones relativas entre nodos
     catchE (writeOutput $ joinLines (process final_matrix) '\n') (\x -> throwE $ "Indices fuera de limite. " ++ x)
     edges <- getValueFromState "EDGES"
-    (b, dato) <- typeChecker edges (Cadena "")
+    dato <- typeChecker edges (Cadena "")
     f_edges <- cadenaGet dato
     writeOutput f_edges
+    -- FALTA AGREGAR LA AGRUPACION POR COLORES
+    colores <- getValueFromState "COLORS"
+    dato <- typeChecker colores (Colors [])
+    f_colores <- colorGet dato 
+    writeOutput $ joinLines (genColorString f_colores) '\n'
+    --------------------------------------------
     name <- getValueFromState "NAME"
-    (b, dato) <- typeChecker name (Cadena "")
+    dato <- typeChecker name (Cadena "")
     name <- cadenaGet dato
     -- Header para el archivo .tex
     writeOutput "\\end{tikzpicture}\n\\end{document}\n"
     lift.lift $ writeFile (strName ++ ".tex") ""
     output <- getValueFromState "OUTPUT"
-    (b, dato) <- typeChecker output (Output [])
+    dato <- typeChecker output (Output [])
     out_data <- outputGet dato
     -- Escribimos todo lo acumulado en OUTPUT
     lift.lift $ append (strName ++ ".tex") (flattenLines out_data)
@@ -274,10 +281,10 @@ gridGet :: DataType' -> Eval Mapper
 gridGet (Grid m) = return m
 
 -- Chequeador de tipos
-typeChecker :: Either String DataType' -> DataType' -> Eval (Bool, DataType')
+typeChecker :: Either String DataType' -> DataType' -> Eval DataType'
 typeChecker (Left s) _ = throwE s
 typeChecker (Right d) s = do
-    if toConstr d == toConstr s then return (True, d)
+    if toConstr d == toConstr s then return d
     else throwE (
         format "No coinciden los tipos. Se recibio % pero se esperaba %." [show (toConstr d), show (toConstr s)]
         )
@@ -296,10 +303,26 @@ genNodeString ([], n2) op = throwE (format "Falta el operando izquierdo para %."
 genNodeString (n1, n2) op = do
     if n1 == n2 then do
         m_dist <- getValueFromState "DIST"
-        (b, dato) <- typeChecker m_dist (Entero 0)
+        dato <- typeChecker m_dist (Entero 0)
         dist <- enteroGet dato
         return $ format "\\Loop[style={%},dist=%cm!](%)(%)\n" [op, show dist, n1, n1]
     else return (format "\\Edge[style={%}!](%)(%)\n" [op, n1, n2])
+
+genColorString :: [(String, String)] -> [String]
+genColorString l = genColorString' (groupByColor l)
+
+genColorString' :: [[(String, String)]] -> [String] 
+genColorString' []       = []
+genColorString' (f:rest) = ("\\AddVertexColor{" ++ color ++ "}{" ++ nodos_str ++ "}") : genColorString' rest
+                            where 
+                                -- Obtenemos el primer color que aparezca y construimos la lista con los id de nodos
+                                (color, nodos) = (getNodeColor f, map snd f)
+                                -- Formateamos la lista para obtener algo con la forma: n1,n2,n2
+                                -- Tambien obtenemos todos excepto el ultimo elemento para eliminar la "," de mas
+                                nodos_str = init $ foldr (\x y -> x ++ "," ++ y) "" nodos 
+
+getNodeColor :: [(String, String)] -> String
+getNodeColor (f:rest) = fst f
 
 -- Evaluacion de expresiones con nodos
 evalNodexp :: Nodexp -> Eval String
@@ -317,13 +340,13 @@ evalNodexp (LeftRight nl nr) = do
         genNodeString (node1, node2) "-"
 evalNodexp (NodeVar var) = do
         nodeVar <- getValueFromState var
-        (_, str) <- typeChecker nodeVar (Node "" 0 0)
+        str <- typeChecker nodeVar (Node "" 0 0)
         (i, d, t) <- nodeGet str
         return i
 evalNodexp (ConstNode str) = do
     rresult <- evalStrExp str
     nodeContent <- getValueFromState rresult
-    (_, node) <- typeChecker nodeContent (Node "" 0 0)
+    node <- typeChecker nodeContent (Node "" 0 0)
     (i, d, t) <- nodeGet node
     return i
 
@@ -334,10 +357,8 @@ evalStrExp (Concat l r)     = do sl <- evalStrExp l
                                  sr <- evalStrExp r
                                  return (sl ++ sr)
 evalStrExp (VariableStr sv) = do r <- getValueFromState sv
-                                 (b, dato) <- typeChecker r (Cadena "")
-                                 if b then do cadenaGet dato
-                                 else do updateValueFromState "ERR" (Cadena "No coinciden los tipos")
-                                         throwE $ "No coincide el tipo de \"" ++ sv ++ "\" esperado string."
+                                 dato <- typeChecker r (Cadena "")
+                                 cadenaGet dato
 evalStrExp (StrCast n)      = do res <- evalIntExp n
                                  return (show res)
 
@@ -371,10 +392,8 @@ evalIntExp (IntCast str) = do s <- evalStrExp str
                                     Just num -> return num
                                     Nothing  -> throwE ("Error al castear la string \"" ++ s ++ "\"")
 evalIntExp (Variable v)  = do r <- getValueFromState v
-                              (b, dato) <- typeChecker r (Entero 0)
-                              if b then do enteroGet dato
-                              else do updateValueFromState "ERR" (Cadena "No coinciden los tipos")
-                                      throwE "No coinciden los tipos"
+                              dato <- typeChecker r (Entero 0)
+                              enteroGet dato
 
 -- Evaluacion de expresiones booleanas
 evalBoolExp :: Bexp -> Eval Bool
