@@ -1,13 +1,17 @@
-GRAPH("grafico1", 5)[2]
-
-    node {"n1"}<0,0>;
-    node {"n2"}<0,1>;
-    node {"n3"}<1,0>;
-    node {"n4"}<1,1>;
-
-    color "red" {n1};
-    color "red" {n2};
-    color "blue" {n3};
-    color "blue" {n4}
-
-END
+string nombre = "";
+int max = 2;
+int counter = 0;
+int fila = 0;
+int columna = 0;
+GRAPH("", 5)[2]
+    while (fila < max) {
+        while (columna < max){
+            nombre = "n" & str(counter);
+            node {nombre}<fila,columna>;
+            counter = counter + 1;
+            columna = columna + 1
+        };
+        columna = 0;
+        fila = fila + 1
+    }
+END 

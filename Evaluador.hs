@@ -187,6 +187,7 @@ evalComm (Set edge_color tagexp ndexp) = do
 evalComm (Graph name distancia msize cmd) = do
     -- Nombre del grafo
     strName <- evalStrExp name
+    when (strName == "") (throwE "El nombre del grafico no puede ser vacio.")
     -- Distancia entre nodos
     dist <- evalIntExp distancia
     -- Tamanio de la matriz 
