@@ -172,7 +172,7 @@ bvalue = try (do reserved lis "true"
 -- Not
 notp :: Parser' Bexp
 notp = try $ do reservedOp lis "not"
-                Not <$> boolexp3
+                Not <$> boolexp
 
 {--------------------------------------------------------------------------------------------------}
 
