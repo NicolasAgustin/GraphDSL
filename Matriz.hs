@@ -27,10 +27,17 @@ getMatrix (M m) = m
 empty :: Matrix a
 empty = M [[]]
 
+{-
+    Construimos una matrix de n*n populandola con
+    el valor e
+-}
 build :: a -> Integer -> Matrix a
 build e 0 = M [[]]
 build e n = M $ replicate (fromIntegral n) (replicate (fromIntegral n) e)
 
+{-
+    Funcion para obtener las dimensiones de una matriz
+-}
 dimensions :: Matrix a -> (Integer, Integer)
 dimensions (M []) = (0, 0)
 dimensions (M m@(l:rest)) = (toInteger $ length m - 1, toInteger $ length l - 1)

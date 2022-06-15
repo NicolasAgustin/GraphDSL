@@ -11,8 +11,6 @@ import GHC.TopHandler (runIO)
 
 -- data MNode = MNode DataType' deriving (Show, Eq)
 
-
-
 insert :: DataType' -> Mapper -> Mapper
 insert n@(Node id r c) m = set (r, c) n m
 
@@ -34,6 +32,10 @@ toOrientations m node = getOrientation node neighbor
                         m_sin_node = set (x, y) (Node "" 0 0) neighbors2
                         neighbor   = irows (getMatrix neighbors2)
                         (x, y)     = (\(Node _ r c) -> (r, c)) node
+
+{-
+    Funciones auxiliares para iterar los nodos cercanos (vecinos)
+-}
 
 irows :: [[DataType']] -> DataType'
 irows []       = Node "" 0 0

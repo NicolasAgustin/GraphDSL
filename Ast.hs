@@ -1,12 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Ast where
 import Data.Data
 -- import OrientationMapper (Mapper)
 import Matriz
 type Var = String 
-
--- Este tipo se tiene que sacar
-data GenExpType = ExpStr StringExp | ExpInt Iexp deriving (Show, Eq)
 
 type Mapper = Matrix DataType'
 
@@ -56,15 +54,6 @@ data Iexp = Plus Iexp Iexp          -- Suma
             | IntCast StringExp     -- Casteo a entero
             | Mod Iexp Iexp
             deriving (Show, Eq)
-
-data Position = Above | Below | PRight | PLeft deriving (Eq) 
-
--- Instancia de Show para el tipo de dato Position
-instance Show Position where
-    show PRight = "right"
-    show PLeft  = "left"
-    show Above  = "above"
-    show Below  = "below"
 
 -- Expresiones de nodos
 data Nodexp = LeftTo Nodexp Nodexp          -- Arista de izquierda a derecha n->n2

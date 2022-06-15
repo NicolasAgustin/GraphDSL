@@ -49,11 +49,6 @@ lis = makeTokenParser (emptyDef   { commentLine   = "#"
 type Parser' = Parsec String [(String, Types)]
 
 {- EXPRESIONES DE NODO -}
-
-{-
-        TODO: 
-        Hay que revisar los ordenes sintacticos porque falla cuando trata de parsear <-
--}
 nodexp :: Parser' Nodexp
 nodexp = try (do whiteSpace lis
                  n1 <- braces lis nodexp
@@ -276,7 +271,7 @@ cmdparser = try (do reserved lis "if"
                         -- parseNodeCmd 
                         (n_id, x, y) <- between (whiteSpace lis) (whiteSpace lis) parseNodeCmd        -- Parseamos nodo id, posiciones, tag
                         return (LetNodeCoord n_id x y))
-            <|> try (do reserved lis "color"
+            <|> try (do reserved lis "color"    -- color (COLOR) {id}
                         whiteSpace lis
                         color <- strexp
                         node <- braces lis nodexp
@@ -314,25 +309,9 @@ parseNodeCmd = do whiteSpace lis
                   char '<'
                   x <- intexp
                   char ','
-                  y <- intexp      
+                  y <- intexp
                   char '>'
                   return (node_id, x, y)
-
-
--- Parser para el comando insert
-parseInsert :: Parser' (StringExp , StringExp, Maybe ([Position], Nodexp))
-parseInsert = do whiteSpace lis
-                 nd <- parseStrParens           -- Intenta parsear con o sin parentesis
-                 char ','
-                 tag <- parseStrParens
-                 dir <- optionMaybe (do
-                            whiteSpace lis
-                            char ','
-                            p <- many parseDirection    -- Parseamos las diferentes direcciones (above, below, right, left)
-                            reserved lis "of"
-                            id <- parseNodeVarParens
-                            return (p, id))
-                 return (nd, tag, dir)
 
 parseNodeVarParens :: Parser' Nodexp
 parseNodeVarParens = try (do parens lis nodexp)
@@ -342,21 +321,6 @@ parseNodeVarParens = try (do parens lis nodexp)
 parseStrParens :: Parser' StringExp
 parseStrParens = try (do parens lis strexp)
                  <|> try strexp
-
--- Parser de direcciones
-parseDirection :: Parser' Position
-parseDirection = try (do whiteSpace lis
-                         reserved lis "right"
-                         return PRight)
-                 <|> try (do whiteSpace lis
-                             reserved lis "left"
-                             return PLeft)
-                 <|> try (do whiteSpace lis
-                             reserved lis "below"
-                             return Below
-                 <|> try (do whiteSpace lis
-                             reserved lis "above"
-                             return Above))
 
 -- Parser para parametros del for
 forp :: Parser' (Iexp, Iexp)

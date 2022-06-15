@@ -124,10 +124,10 @@ evalComm (Log str)                  = do s <- evalStrExp str
                                          dato <- typeChecker name (Entero 0)
                                          logger_flag <- enteroGet dato
                                          -- Cambiamos el valor, para que la proxima vez solamente hagamos append
-                                         updateValueFromState "LOGGER" (Entero 1)
                                          if logger_flag == 0 then
                                              do lift.lift $ writeFile "logger.lg" ""
                                                 lift.lift $ append "logger.lg" (s ++ "\n")
+                                                updateValueFromState "LOGGER" (Entero 1)
                                          else lift.lift $ append "logger.lg" (s ++ "\n")
 -- Definicion de strings
 evalComm (LetStr v stre)            = do str <- evalStrExp stre
@@ -187,7 +187,7 @@ evalComm (Set edge_color tagexp ndexp) = do
 evalComm (Graph name distancia msize cmd) = do
     -- Nombre del grafo
     strName <- evalStrExp name
-    when (strName == "") (throwE "El nombre del grafico no puede ser vacio.")
+    when (strName == "") (throwE "El nombre del grafico no puede estar vacio.")
     -- Distancia entre nodos
     dist <- evalIntExp distancia
     -- Tamanio de la matriz 
@@ -214,7 +214,7 @@ evalComm (Graph name distancia msize cmd) = do
     dato <- typeChecker edges (Cadena "")
     f_edges <- cadenaGet dato
     writeOutput f_edges
-    -- FALTA AGREGAR LA AGRUPACION POR COLORES
+    -- AGRUPACION POR COLORES
     colores <- getValueFromState "COLORS"
     dato <- typeChecker colores (Colors [])
     f_colores <- colorGet dato 
@@ -250,15 +250,17 @@ evalComm (Graph name distancia msize cmd) = do
         Texto parseado
 -}
 addOptions :: Maybe StringExp -> Maybe StringExp -> Eval String
-addOptions color tag = do case tag of
-                            Nothing -> return ""
-                            Just s  -> do tag <- evalStrExp s
-                                          case color of
-                                            Nothing -> return (format ",label=$%$" [tag])
-                                            Just c  -> do
-                                                        evaluated_color <- evalStrExp c
-                                                        colorChecker evaluated_color
-                                                        return (format ",label=$%$,color=%" [tag, evaluated_color])
+addOptions color tag = do 
+    case tag of
+        Nothing -> return ""
+        Just s  -> 
+            do tag <- evalStrExp s
+               case color of
+                   Nothing -> return (format ",label=$%$" [tag])
+                   Just c  -> 
+                       do evaluated_color <- evalStrExp c
+                          colorChecker evaluated_color
+                          return (format ",label=$%$,color=%" [tag, evaluated_color])
 
 colorChecker :: String -> Eval ()
 colorChecker color = do when (color `notElem` colors) $ throwE "Color no definido"

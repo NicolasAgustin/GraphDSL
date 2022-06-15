@@ -15,10 +15,17 @@ splitOn p s =  case dropWhile (p==) s of
 flattenLines :: [String] -> String
 flattenLines = concat
 
+{-
+    Funcion para reemplazar un caracter en una string por otra string
+-}
+
 replace :: String -> (Char, String) -> String 
 replace [] _            = []
 replace (h:rest) (d, s) = if h == d then s ++ rest else h : replace rest (d, s)   
 
+{-
+    Funcion para unir una lista en un caracter
+-}
 joinLines :: [String] -> Char -> String 
 joinLines [] _       = ""
 joinLines (h:rest) c = h ++ [c] ++ joinLines rest c
@@ -29,7 +36,7 @@ format str (h:rest) = format result_string rest
                                         where
                                             result_string = formatString h str
 
--- Recibe una string con {} y pone la string 1 en la posicion de {}
+-- Recibe una string con % y pone la string 1 en la posicion de %
 formatString :: String -> String -> String
 formatString str []        = ""
 formatString toPlace (h:rest) = if h == '%' then toPlace ++ rest
