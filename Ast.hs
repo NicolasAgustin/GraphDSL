@@ -7,6 +7,9 @@ import Matriz
 type Var = String 
 
 type Mapper = Matrix DataType'
+{-
+    Tipo mapper que contiene la matriz dentro
+-}
 
 data DataType' = Entero Integer
                 | Cadena String
@@ -41,6 +44,10 @@ instance Eq DataType' where
     (==) (Grid m) (Grid m2)           = m == m 
     (==) _ (Grid m)                   = False
     (==) (Grid m) _                   = False  
+{-
+    Instancia para poder facilitarnos la comparacion entre
+    tipos
+-}
 
 -- Expresiones enteras
 data Iexp = Plus Iexp Iexp          -- Suma

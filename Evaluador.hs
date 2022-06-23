@@ -29,6 +29,26 @@ import OrientationMapper (process)
 
 -- Tipo de dato para agrupar las monadas (transformadores)
 type Eval a = ExceptT String (StateT Env IO) a
+{-
+    usamos transformadores de monadas,
+    un transformador de monadas es una monada
+    que contiene una monada dentro
+    lo que nos permite combinar varias monadas
+
+    en este caso utilizamos la monada IO,
+    para poder realizar operaciones de entrada salida (logger)
+    que esta encapsulada en la monada StateT, la cual nos permite
+    llevar un estado para nuestro evaluador
+    y que a su vez esta encapsulada en la monada ExceptT que nos permite
+    el manejo de errores para nuestro evaluador
+
+    StateT recibe el tipo del entorno es decir, nuestro estado
+    y la monada que encapsulara (IO)
+
+    ExceptT recibe el tipo de las excepciones String en este caso y la monada que 
+    encapsula (StateT Env IO)
+-}
+
 
 -- Tipo de dato para el estado 
 type Env = [(String, DataType')]
@@ -36,20 +56,34 @@ type Env = [(String, DataType')]
 -- Inicializacion del estado
 initState :: Env
 initState = [
+    -- counter para el bucle
     ("COUNTER", Entero 0),
+    -- variable para llevar los errores, no se usa
     ("ERR", Cadena ""),
+    -- variable bandera para crear el archivo de logger
     ("LOGGER", Entero 0),
+    -- variable para llevar las lineas que se tienen que escribir
     ("OUTPUT", Output []),
+    -- variable para llevar la matrix interna
     ("MATRIX", Grid (M [])),
+    -- variable para llevar las cadenas
     ("EDGES", Cadena ""),
+    -- variable para guardar la distancia entre nodos
     ("DIST", Entero 0),
+    -- variable para guardar los nodos de colores
     ("COLORS", Colors [])
     ]
 
 colors = ["red","blue","green","yellow","black","white","brown","purple","grey","orange","pink"]
+{-
+    colores que tendra nuestro lenguaje
+-}
 
 eval :: Cmd -> Eval ()
 eval p = do evalCommInit p
+{-
+    p: ast de comandos a evaluar
+-}
 
 {- Funciones auxiliares para manejar el estado de StateT -}
 
@@ -73,6 +107,13 @@ lookState var ((s,s1):st) = if s == var
 evalCommInit :: Cmd -> Eval ()
 evalCommInit p = do put initState
                     evalComm p
+{-
+    esta funcion inicializa el estado del parser con put
+    put inserta el estado inicial en la monada
+    initState es el estado inicial para el evaluador
+    luego llama al evaluador de comandos con el ast p
+-}
+
 
 -- No se utiliza, funcion para intentar indicar cual seria el tipo esperado
 assert :: DataType' -> Either String DataType' -> Eval Bool
@@ -83,10 +124,19 @@ assert tipo toAssert = do case toAssert of
 -- Obtener un valor del estado
 getValueFromState :: String -> Eval (Either String DataType')
 getValueFromState varName = lift $ gets (lookState varName)
+{-
+    obtenemos el valor de la variable varName desde el estado
+    pero gets devuelve una monada StateT por lo que debemos 
+    insertar esa computacion dentro de la monada ExceptT
+-}
 
 -- Actualizar un valor del estado
 updateValueFromState :: String -> DataType' -> Eval ()
 updateValueFromState varName value = modify (updateState varName value)
+{-
+    aca no necesitamos hacer un lift debido a que
+    modify retorna ()
+-}
 
 {-
     Descripcion:
@@ -98,10 +148,28 @@ updateValueFromState varName value = modify (updateState varName value)
 -}
 writeOutput :: String -> Eval ()
 writeOutput str = do output <- getValueFromState "OUTPUT"
+                     {-
+                        primero obtenemos el valor de 
+                        OUTPUT desde el estado
+                     -}
                      dato <- typeChecker output (Output [])
+                     {-
+                        con ese valor que obtuvimos, 
+                        chequeamos si es del tipo esperado
+                        si falla el chequeo de tipos, la siguiente
+                        linea no se ejecuta
+                     -}
                      out <- outputGet dato
+                     {-
+                        debido al typechecker de arriba
+                        si no era del tipo correcto no se llega a esta linea
+                        si es del tipo correcto
+                        es seguro hacer un get esperando que el tipo
+                        sea Output
+                     -}
                      updateValueFromState "OUTPUT" (Output $ new out)
                         where new out = out ++ [str]
+                        -- agregamos la linea str a output
 
 
 {-
