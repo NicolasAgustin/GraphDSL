@@ -193,6 +193,22 @@ evalComm (Log str)                  = do s <- evalStrExp str
                                          logger_flag <- enteroGet dato
                                          -- Cambiamos el valor, para que la proxima vez solamente hagamos append
                                          if logger_flag == 0 then
+                                            {-
+                                                debido a que tenemos varias monadas stackeadas
+                                                    ExceptT 
+                                                    ExceptT StateT
+                                                    ExceptT StateT IO
+                                                Debemos realizar un lift para poder insertar
+                                                el resultado de la operacion IO, en este caso writeFile
+                                                que es IO (), dentro de la monada StateT
+                                                para esto realizamos 
+                                                    lift $ writeFile
+                                                pero debido a que aun tenemos un nivel mas,
+                                                ExceptT, debemos insertar el resultado dentro de la 
+                                                monada ExceptT.
+
+                                                ExceptT (StateT (writeFile "logger.lg" ""))
+                                            -}
                                              do lift.lift $ writeFile "logger.lg" ""
                                                 lift.lift $ append "logger.lg" (s ++ "\n")
                                                 updateValueFromState "LOGGER" (Entero 1)
@@ -214,6 +230,15 @@ evalComm (For f l c)                = do -- Limite inferior
                                          limit <- evalIntExp l
                                          -- Si los limites son distintos, seguir iterando
                                          when (from /= limit) $ do evalComm (Seq c (For (Const (from+1)) l c))
+                                         {-
+
+                                            para la iteracion, creamos un nuevo Ast con from+1
+                                            Creamos un Seq con el comando c para que se evalue el comando
+                                            e insertamos un For con from+1 y los mismos l y c
+
+                                            when retorna la monada especificada por el do en si (from /= limit)
+                                            en caso contrario retorna ()
+                                         -}
 -- Bucle while
 evalComm (While cond cmd)           = do condicion <- evalBoolExp cond
                                          when condicion $ do evalComm (Seq cmd (While cond cmd))
@@ -230,12 +255,32 @@ evalComm (LetNodeCoord id x y)      = do
     final_matrix <- gridGet dato
     -- Agregamos el nodo en la matriz
     updateValueFromState "MATRIX" (Grid $ set (x_value, y_value) (Node nodeName x_value y_value) final_matrix)
+    {-
+        insertamos el nodo en la matriz en las coordenadas
+        (x_value, y_value)
+    -}
     updateValueFromState nodeName (Node nodeName x_value y_value)
 evalComm (Color colorexp node) = do
     color <- evalStrExp colorexp
     n <- evalNodexp node
     if map toLower color `notElem` colors then throwE "Color no valido"
+    {-
+        chequeamos si el color que evaluamos no forma parte de los colores disponibles para mi lenguaje
+        en dicho caso, arrojamos una excepcion
+
+        map toLower color 
+            convertimos la string en letras minusculas, para que sea indistinto si se
+            escribe con mayusculas o no
+
+        notElem es la negacion de elem 
+        recibe un a y una lista de a y chequea si a no esta presente en la lista
+    -}
     else do color_list <- getValueFromState "COLORS"
+            {-
+                en caso de que si este en la lista de colores
+                obtengo los nodos con colores del estado
+                e inserto la nueva tupla a la lista con colores
+            -}
             dato <- typeChecker color_list (Colors [])
             colors <- colorGet dato 
             updateValueFromState "COLORS" (Colors (colors ++ [(color, n)]))
@@ -278,6 +323,15 @@ evalComm (Graph name distancia msize cmd) = do
     final_matrix <- gridGet dato
     -- Proceso para establecer posiciones relativas entre nodos
     catchE (writeOutput $ joinLines (process final_matrix) '\n') (\x -> throwE $ "Indices fuera de limite. " ++ x)
+    {-
+        realizamos el proceso de relacionar los nodos mediante puntos cardinales
+        el resultado sera una lista de strings que unimos entre \n creando
+        lineas que despues podemos imprimir en el archivo
+
+        catchE recibe un ExceptT y si se produjo una excepcion se ejecuta la funcion definida por el handler
+        en este caso: 
+            (\x -> throwE $ "Indices fuera de limite. " ++ x)
+    -}
     edges <- getValueFromState "EDGES"
     dato <- typeChecker edges (Cadena "")
     f_edges <- cadenaGet dato
@@ -333,6 +387,15 @@ addOptions color tag = do
 colorChecker :: String -> Eval ()
 colorChecker color = do when (color `notElem` colors) $ throwE "Color no definido"
 
+{-
+    funciones para desempaquetar
+    los tipos y obtener los valores
+    solamente las utilizamos cuando
+    sabemos que realmente es seguro
+    por eso las utilizamos en complemento con
+    typeChecker
+-}
+
 cadenaGet :: DataType' -> Eval String
 cadenaGet (Cadena s) = return s
 
@@ -355,7 +418,13 @@ gridGet (Grid m) = return m
 typeChecker :: Either String DataType' -> DataType' -> Eval DataType'
 typeChecker (Left s) _ = throwE s
 typeChecker (Right d) s = do
+    {-
+        obtenemos el constructor con toConstr
+        de esta forma podemos comparar si son del mismo
+        tipo d y s
+    -}
     if toConstr d == toConstr s then return d
+    {- retornamos el tipo d ya que es seguro seguir operando con el mismo -}
     else throwE (
         format "No coinciden los tipos. Se recibio % pero se esperaba %." [show (toConstr d), show (toConstr s)]
         )
@@ -372,6 +441,11 @@ genNodeString :: (String, String) -> String -> Eval String
 genNodeString (n1, []) op = throwE (format "Falta el operando derecho para %." [op])
 genNodeString ([], n2) op = throwE (format "Falta el operando izquierdo para %." [op])
 genNodeString (n1, n2) op = do
+    {-
+        si n1 y n2 son iguales entonces
+        la arista que se quiere insertar es sobre el mismo nodo
+        por lo tanto se debe insertar un bucle
+    -}
     if n1 == n2 then do
         m_dist <- getValueFromState "DIST"
         dato <- typeChecker m_dist (Entero 0)
@@ -391,6 +465,28 @@ genColorString' (f:rest) = ("\\AddVertexColor{" ++ color ++ "}{" ++ nodos_str ++
                                 -- Formateamos la lista para obtener algo con la forma: n1,n2,n2
                                 -- Tambien obtenemos todos excepto el ultimo elemento para eliminar la "," de mas
                                 nodos_str = init $ foldr (\x y -> x ++ "," ++ y) "" nodos 
+{-
+    genColorString recibe todos los nodos con colores que hay en el estado
+    
+    genColorString' recibe (f:rest) es una lista de listas de tuplas
+    donde cada elemento es una lista con los colores agrupados
+    y cada elemento de esa lista de colores agrupados es una tupla (color, nodo id)
+    entonces por cada lista de color generamos la string
+        \\AddVertexColor{"color"}{"n1,n2,...n"}
+    donde los n son los id de los nodos que estan agrupados por color
+    
+    (color, nodos) = (getNodeColor f, map snd f)
+    color es el color del que pintar los nodos
+    nodos es el resultado de obtener el segundo elemento de cada tupla de la lista f que contiene
+    los nodos grupados para ese color
+    por eso hacemos un map snd f
+
+    nodos_str = init $ foldr (\x y -> x ++ "," ++ y) "" nodos
+    lo que hacemos con esa linea es, ir concatenando todos los elementos de nodos, que son los ids
+    aplicamos foldr para ir plegando la lista y obtener una unica string
+    usamos init porque al final queda una ',' extra, init retorna todos los elementos excepto el ultimo
+-}
+
 
 getNodeColor :: [(String, String)] -> String
 getNodeColor (f:rest) = fst f
@@ -459,6 +555,10 @@ evalIntExp (Uminus l)    = do e1 <- evalIntExp l
 evalIntExp (Len str)     = do s <- evalStrExp str
                               return (toInteger $ length s)
 evalIntExp (IntCast str) = do s <- evalStrExp str
+                              {-
+                                readMaybe intenta parsear una string y convertirla en 
+                                int, retorna un maybe int
+                              -}
                               case readMaybe s of
                                     Just num -> return num
                                     Nothing  -> throwE ("Error al castear la string \"" ++ s ++ "\"")
