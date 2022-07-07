@@ -63,6 +63,7 @@ nodexp :: Parser' Nodexp
 nodexp = try (do whiteSpace lis
                  n1 <- braces lis nodexp
                  {-
+                 {nodexp} -> {n2}
                     braces parsea el parser nodexp 
                     entre llaves
                  -}
@@ -398,7 +399,7 @@ cmdparser = try (do reserved lis "if"
                         def <- intexp
                         modifyState (updatePState str PEntero)          -- Agregamos la variable con su tipo para saber a que 
                         return (Let str def))                           --      parser llamar
-                        {-
+                        {- map (+1) [1,2,3,4]
                             agregamos al estado una tupla 
                             con el nombre de la variable que se definio y su tipo
                             ya que no encontramos una forma de poder realizar lo siguiente

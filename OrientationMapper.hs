@@ -22,9 +22,17 @@ process m = iterRows m m 0
     generar la lista de strings con los nodos que hay en la matriz,
     posicionando los nodos de forma relativa y especificada por puntos
     cardinales
+
+    1. Iteramos fila por fila, columna por columna (nodo a nodo)
+    2. Obtenemos los nodos de alrededor con la copia de la matriz
+    3. Iteramos la matriz de los nodos vecinos del nodo actual
+    4. Buscamos un nodo relativo a partir del cual colocar el nodo que estamos procesando
+    5. Generamos la string
+
+
 -}
 
-
+-- Comenzamos a iterar la matriz
 iterRows :: Mapper -> Mapper -> Int -> [String]
 iterRows m (M []) _             = []
 iterRows m (M (l:rest)) counter = iterCols m l counter 0 ++ iterRows m (M rest) (counter+1)
@@ -92,7 +100,7 @@ toOrientations m node = getOrientation node neighbor
 {-
     Funciones auxiliares para iterar los nodos cercanos (vecinos)
 -}
-
+-- Iteramos los vecinos para buscar de que nodo colgar el nodo que estamos procesando
 irows :: [[DataType']] -> DataType'
 irows []       = Node "" 0 0
 irows (l:rest) = if neighbor == Node "" 0 0 then irows rest else neighbor

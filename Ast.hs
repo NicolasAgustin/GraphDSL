@@ -70,6 +70,7 @@ data Nodexp = LeftTo Nodexp Nodexp          -- Arista de izquierda a derecha n->
               | ConstNode StringExp         -- Expresion de string para los id de nodos
               deriving (Show, Eq)
 
+
 -- Expresiones booleanas
 data Bexp = Btrue                           -- True
             | Bfalse                        -- False

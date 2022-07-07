@@ -12,6 +12,9 @@ splitOn p s =  case dropWhile (p==) s of
                       s' -> w : splitOn p s''
                             where (w, s'') = break (p==) s'
 {-
+    dropWhile itera mientras encuentre el separador
+    break itera mientras no encuentre el separador
+
     funcion para poder recortar una string en un caracter especifico
     p: caracter en el que debemos cortar
     s: string que vamos a cortar

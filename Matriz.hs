@@ -19,7 +19,6 @@ newtype Matrix a = M [[a]] deriving (Eq, Data)
     al tener un solo constructor ya sabe de que tipo sera.
 -}
 
-
 type Coord = (Integer, Integer)
 {-
     tipo coordenada, para poder representar coordenadas
@@ -39,6 +38,9 @@ instance (Show a) => Show (Matrix a) where
 
 make :: Show a => [a] -> [String]
 make = map show
+{-
+    castea todos los elementos de una lista en string
+-}
 
 getMatrix :: Matrix a -> [[a]]
 getMatrix (M m) = m
@@ -152,7 +154,7 @@ search' e (M (l:rest)) (r, c) rs = if b && r <= rs then (r, i) else search' e (M
     para esto usamos elemIndex :: Eq a => a -> [a] -> Maybe Int
     Si es nothing, el elemento no esta en la fila. Entonces llamamos recursivamente a search'
     con el mismo elemento, el resto de las filas (rest), r+1 porque tenemos que buscar en la siguiente
-    fila, con c no hacemos nada?? y rs porque los limites van a ser los mismos.
+    fila, con c no hacemos nada y rs porque los limites van a ser los mismos.
     Si es just entonces el elemento esta presente en la fila. devolvemos (true, index) donde index es la
     columna donde esta el elemento en esa fila.
     Una vez que encontramos el elemento, debemos chequear si todavia no nos pasamos del limite.
@@ -228,7 +230,7 @@ fst' :: (a, a) -> a
 fst' (x,_) = x
 
 sublist :: (Eq a) => Integer -> Integer -> [a] -> [a]
-sublist from to l = if from == to then [l !! fromIntegral from] else l !! fromIntegral from : sublist (from+1) to l
+sublist from to l = if from == to then [l !! fromIntegral from] else (l !! fromIntegral from) : sublist (from+1) to l
 {-
     Esta funcion es para obtener una sublista de una lista
     from es el indice inicial, to es el indice maximo
@@ -284,7 +286,7 @@ calculateLimit (ri, ci) (rs, cs) = ((r_upper, c_upper), (r_lower, c_lower))
 
 {-
     Esta funcion calcula los puntos izquierdos y superiores en base a una coordenada
-    recibe la coordenada especifica y las dimensiones.
+    recibe la coordenada especifica y las dimensiones. No se usa
 -}
 
 testt = set (1,1) 1 (build 0 3)
